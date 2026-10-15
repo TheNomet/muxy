@@ -51,6 +51,8 @@ pub struct Appearance {
     pub tips_visible: bool,
     pub auto_expand_worktrees: bool,
     pub worktree_show_unread: bool,
+    /// Whether the worktree switcher lists the current worktree first, then the most recently used.
+    pub worktree_recent_order: bool,
     pub worktree_recent: Vec<crate::ProjectId>,
     pub hidden_worktrees: std::collections::BTreeSet<crate::ProjectId>,
     pub tab_focused_expanded: std::collections::BTreeMap<crate::ProjectId, bool>,
@@ -79,6 +81,7 @@ impl Default for Appearance {
             tips_visible: true,
             auto_expand_worktrees: false,
             worktree_show_unread: true,
+            worktree_recent_order: true,
             worktree_recent: Vec::new(),
             hidden_worktrees: std::collections::BTreeSet::new(),
             tab_focused_expanded: std::collections::BTreeMap::new(),

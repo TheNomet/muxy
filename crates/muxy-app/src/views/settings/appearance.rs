@@ -156,6 +156,11 @@ pub(super) fn rows(
             tr_key!("Show unread worktree indicators"),
             appearance.worktree_show_unread,
         ),
+        (
+            "worktree-recent-order",
+            tr_key!("Order the worktree switcher by recent use"),
+            appearance.worktree_recent_order,
+        ),
     ] {
         if category == Category::Appearance && pane.matches(category, label) {
             rows.push(pane.row(

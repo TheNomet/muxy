@@ -70,6 +70,7 @@ mod views {
     pub(crate) mod voice;
     pub(crate) mod webview;
     pub(crate) mod workspace;
+    pub(crate) mod worktree_picker;
 }
 
 use std::cell::Cell;
@@ -90,9 +91,9 @@ use views::workspace::{
     FocusPaneUp, HideApp, HideOthers, IncreaseFontSize, InstallCommandLineTool, Minimize,
     NewBrowserTab, NewHomeTab, NewTab, NewTabInProject, NextProject, NextPrompt, NextTab,
     OpenSettings, PreviousProject, PreviousPrompt, PreviousTab, Quit, SelectCommandOutput,
-    SelectProject, SelectTab, ShowAll, SplitDown, SplitRight, ToggleCommandPalette, ToggleComposer,
-    ToggleFullScreen, ToggleSidebar, ToggleThemePicker, ToggleVoiceRecording, ToggleZoomPane, Zoom,
-    bind_keys,
+    SelectProject, SelectTab, ShowAll, SplitDown, SplitRight, SwitchWorktree, ToggleCommandPalette,
+    ToggleComposer, ToggleFullScreen, ToggleSidebar, ToggleThemePicker, ToggleVoiceRecording,
+    ToggleZoomPane, Zoom, bind_keys,
 };
 
 fn main() -> ExitCode {
@@ -357,6 +358,7 @@ fn menus() -> Vec<Menu> {
                 MenuItem::action(tr!("New Browser Tab"), NewBrowserTab),
                 MenuItem::action(tr!("New Home Tab"), NewHomeTab),
                 MenuItem::action(tr!("New Tab in Project…"), NewTabInProject),
+                MenuItem::action(tr!("Switch Worktree…"), SwitchWorktree),
                 MenuItem::action(tr!("Open Project…"), AddProject),
                 MenuItem::separator(),
                 MenuItem::action(tr!("Close Tab"), CloseTab),

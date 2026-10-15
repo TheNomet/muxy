@@ -756,6 +756,7 @@
 "Lime" = "Lime";
 "Line spacing" = "Line spacing";
 "Line spacing from 1.1 to 2.0." = "Line spacing from 1.1 to 2.0.";
+"List the current worktree first, then the most recently used. Off, the project comes first, then its worktrees." = "List the current worktree first, then the most recently used. Off, the project comes first, then its worktrees.";
 "Listening on port %lld" = "Listening on port %lld";
 "Listening..." = "Listening...";
 "Listening…" = "Listening…";
@@ -893,6 +894,7 @@
 "No matching folders" = "No matching folders";
 "No matching languages" = "No matching languages";
 "No matching terminals" = "No matching terminals";
+"No matching worktrees" = "No matching worktrees";
 "No microphone is available" = "No microphone is available";
 "No notification service is running on this desktop." = "No notification service is running on this desktop.";
 "No on-device speech language is installed. Add one in System Settings → Keyboard → Dictation." = "No on-device speech language is installed. Add one in System Settings → Keyboard → Dictation.";
@@ -961,6 +963,7 @@
 "Optional setup commands: add setup to .muxy/worktree.json in the project or $XDG_CONFIG_HOME/muxy/worktree.json (defaults to ~/.config/muxy/worktree.json)." = "Optional setup commands: add setup to .muxy/worktree.json in the project or $XDG_CONFIG_HOME/muxy/worktree.json (defaults to ~/.config/muxy/worktree.json).";
 "Optional teardown commands (review before enabling):" = "Optional teardown commands (review before enabling):";
 "Orange" = "Orange";
+"Order the worktree switcher by recent use" = "Order the worktree switcher by recent use";
 "Outline" = "Outline";
 "Output changed; search again" = "Output changed; search again";
 "Owner: %@" = "Owner: %@";
@@ -1177,6 +1180,7 @@
 "Search sidebars…" = "Search sidebars…";
 "Search symbols…" = "Search symbols…";
 "Search with %@ or enter a website address." = "Search with %@ or enter a website address.";
+"Search worktrees…" = "Search worktrees…";
 "Searches typed in the address bar use this engine." = "Searches typed in the address bar use this engine.";
 "Search…" = "Search…";
 "Select All" = "Select All";
@@ -1277,6 +1281,7 @@
 "Stopping…" = "Stopping…";
 "Switch Project…" = "Switch Project…";
 "Switch Workspace…" = "Switch Workspace…";
+"Switch Worktree…" = "Switch Worktree…";
 "Switch to a branch before committing" = "Switch to a branch before committing";
 "Switch to a branch before creating a pull request" = "Switch to a branch before creating a pull request";
 "Switched to %@ and brought it up to date." = "Switched to %@ and brought it up to date.";
@@ -1509,6 +1514,7 @@
 "Work is in progress." = "Work is in progress.";
 "Work is paused." = "Work is paused.";
 "Work reported an error." = "Work reported an error.";
+"Working" = "Working";
 "Working over SSH? Run muxy on that machine for tabs and splits in the terminal, and press Ctrl-B then ? to see its keys." = "Working over SSH? Run muxy on that machine for tabs and splits in the terminal, and press Ctrl-B then ? to see its keys.";
 "Workspaces" = "Workspaces";
 "Worktree created, but its location preference could not be saved: %@" = "Worktree created, but its location preference could not be saved: %@";
@@ -1654,6 +1660,7 @@
 "show all" = "show all";
 "split down" = "split down";
 "split right" = "split right";
+"switch worktree" = "switch worktree";
 "terminal close find" = "terminal close find";
 "text input backspace" = "text input backspace";
 "text input cancel" = "text input cancel";

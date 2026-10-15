@@ -654,3 +654,121 @@ fn disconnect_discards_a_merge_removal_waiting_for_confirmation(cx: &mut TestApp
     assert!(!cx.has_pending_prompt());
     assert!(!view.read_with(cx, |model, _| model.worktree_removing(worktree)));
 }
+
+#[gpui::test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "Exercise both orders, switching, and removal on one switcher"
+)]
+fn worktree_switcher_lists_this_projects_worktrees_by_recent_use_and_removes_through_inspection(
+    cx: &mut TestAppContext,
+) {
+    use muxy_protocol::{GitAction, GitRequest};
+    use muxy_ui::picker::PickerEvent;
+
+    let (state, root, _, _directory) = pruning_fixture();
+    let (boot, requests) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    cx.simulate_resize(size(px(1200.0), px(800.0)));
+    let mut sent = Sent(requests, Vec::new());
+    view.update(cx, |model, _| {
+        model.servers.local.connection = ConnectionState::Ready;
+    });
+    let switcher = |view: &Entity<AppModel>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |model, _| match &model.overlay {
+            Some(Overlay::Worktrees(switcher)) => Some(switcher.picker.clone()),
+            _ => None,
+        })
+    };
+    let row_top = |id: ProjectId, cx: &mut VisualTestContext| {
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
+        cx.debug_bounds(format!("picker-row-{id}").leak())
+            .map(|bounds| bounds.top())
+    };
+
+    let in_order = |order: &[ProjectId], cx: &mut VisualTestContext| {
+        let tops: Vec<_> = order
+            .iter()
+            .map(|id| row_top(*id, cx).expect("listed"))
+            .collect();
+        tops.windows(2).all(|pair| pair[0] < pair[1])
+    };
+
+    cx.run_until_parked();
+    let order: Vec<_> = view.update(cx, |model, cx| {
+        model.appearance.worktree_recent_order = false;
+        let order: Vec<_> = std::iter::once(root)
+            .chain(model.worktree_children(root).iter().map(|child| child.id))
+            .collect();
+        model.select_project(order[1], cx);
+        order
+    });
+    assert_eq!(order.len(), 4);
+    let [first, below, removed] = [order[1], order[2], order[3]];
+    cx.simulate_keystrokes("cmd-alt-w");
+    assert!(switcher(&view, cx).is_some());
+    assert!(
+        in_order(&order, cx),
+        "without recent order: the project itself, then its worktrees in sidebar order"
+    );
+    let home = view.read_with(cx, |model, _| model.state.home().id);
+    assert_eq!(row_top(home, cx), None, "other projects are not listed");
+    cx.simulate_keystrokes("down enter");
+    view.read_with(cx, |model, _| {
+        assert!(model.overlay.is_none());
+        assert_eq!(model.state.current_project().id, below);
+    });
+
+    view.update(cx, |model, cx| {
+        model.appearance.worktree_recent_order = true;
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("cmd-alt-w");
+    assert!(
+        in_order(&[below, first, root, removed], cx),
+        "the current worktree, then the most recently used, then never-used ones"
+    );
+    cx.simulate_keystrokes("down enter");
+    view.read_with(cx, |model, _| {
+        assert_eq!(
+            model.state.current_project().id,
+            first,
+            "down and return goes back to the previous worktree"
+        );
+    });
+
+    cx.simulate_keystrokes("cmd-alt-w");
+    let picker = switcher(&view, cx).expect("switcher");
+    sent.take();
+    picker.update(cx, |_, cx| {
+        cx.emit(PickerEvent::RowAction {
+            row: removed.to_string().into(),
+            action: "remove".into(),
+        });
+    });
+    cx.run_until_parked();
+    assert!(
+        sent.take().iter().any(|work| matches!(
+            work,
+            Work::Git(GitRequest { project, action: GitAction::InspectRemoval }) if *project == removed
+        )),
+        "removal starts with the inspection that leads to its confirmation"
+    );
+    view.read_with(cx, |model, _| {
+        assert!(
+            model.state.project(removed).is_some(),
+            "nothing is removed yet"
+        );
+        assert_eq!(model.state.current_project().id, first);
+    });
+
+    view.update(cx, |model, cx| {
+        model.dismiss_overlay(cx);
+        model.select_project(model.state.home().id, cx);
+    });
+    cx.simulate_keystrokes("cmd-alt-w");
+    assert!(switcher(&view, cx).is_none(), "Home has no worktrees");
+}

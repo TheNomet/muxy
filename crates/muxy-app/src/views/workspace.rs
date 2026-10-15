@@ -27,6 +27,7 @@ actions!(
         DetachTerminal,
         NewHomeTab,
         NewTabInProject,
+        SwitchWorktree,
         CloseTab,
         SplitRight,
         SplitDown,
@@ -102,6 +103,7 @@ fn workspace_bindings(keymap: &impl muxy_core::shortcuts::ShortcutSettings) -> V
     registry.register(ShortcutId::OpenSettings, &OpenSettings);
     registry.register(ShortcutId::NewHomeTab, &NewHomeTab);
     registry.register(ShortcutId::NewTabInProject, &NewTabInProject);
+    registry.register(ShortcutId::SwitchWorktree, &SwitchWorktree);
     registry.register(ShortcutId::ToggleSidebar, &ToggleSidebar);
     registry.register(ShortcutId::ToggleFullScreen, &ToggleFullScreen);
     registry.register(ShortcutId::ToggleThemePicker, &ToggleThemePicker);
@@ -410,6 +412,9 @@ fn action_handlers(cx: &mut Context<AppModel>) -> gpui::Div {
         .on_action(cx.listener(|model, _: &NewTabInProject, window, cx| {
             model.toggle_new_tab_list(window, cx);
         }))
+        .on_action(cx.listener(|model, _: &SwitchWorktree, window, cx| {
+            model.toggle_worktree_switcher(window, cx);
+        }))
         .on_action(cx.listener(|model, _: &PreviousProject, _, cx| model.cycle_project(false, cx)))
         .on_action(cx.listener(|model, _: &NextProject, _, cx| model.cycle_project(true, cx)))
         .on_action(cx.listener(|model, action: &SelectProject, _, cx| {
@@ -680,6 +685,13 @@ pub(crate) fn register_commands(
             tr_key!("New Home Tab"),
             NewHomeTab,
         ),
+        action(
+            model,
+            ShortcutId::SwitchWorktree,
+            tr_key!("Switch Worktree…"),
+            SwitchWorktree,
+        )
+        .disabled(model.worktree_switcher_project().is_none()),
         action(model, ShortcutId::CloseTab, tr_key!("Close Tab"), CloseTab)
             .disabled(model.active_tab().is_none()),
         action(
