@@ -570,6 +570,7 @@ impl AppModel {
             }
             Command::NewWorktree(id) => {
                 self.open_git_form(id, true, cx);
+                self.focus_git_form(window, cx);
                 return;
             }
             Command::NewProjectTab(id) => {

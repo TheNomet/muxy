@@ -13,6 +13,11 @@ use muxy_ui::tr;
 use super::{AppModel, Form, Overlay, form::field};
 
 impl Form {
+    #[cfg(test)]
+    pub(crate) fn target(&self) -> (ProjectId, bool) {
+        (self.project, self.worktree)
+    }
+
     pub(super) fn branch_input(&self) -> &Entity<TextInput> {
         if self.worktree && self.existing {
             &self.existing_branch

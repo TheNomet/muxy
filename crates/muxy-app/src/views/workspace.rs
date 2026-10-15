@@ -27,6 +27,7 @@ actions!(
         DetachTerminal,
         NewHomeTab,
         NewTabInProject,
+        NewWorktree,
         CloseTab,
         SplitRight,
         SplitDown,
@@ -102,6 +103,7 @@ fn workspace_bindings(keymap: &impl muxy_core::shortcuts::ShortcutSettings) -> V
     registry.register(ShortcutId::OpenSettings, &OpenSettings);
     registry.register(ShortcutId::NewHomeTab, &NewHomeTab);
     registry.register(ShortcutId::NewTabInProject, &NewTabInProject);
+    registry.register(ShortcutId::NewWorktree, &NewWorktree);
     registry.register(ShortcutId::ToggleSidebar, &ToggleSidebar);
     registry.register(ShortcutId::ToggleFullScreen, &ToggleFullScreen);
     registry.register(ShortcutId::ToggleThemePicker, &ToggleThemePicker);
@@ -410,6 +412,14 @@ fn action_handlers(cx: &mut Context<AppModel>) -> gpui::Div {
         .on_action(cx.listener(|model, _: &NewTabInProject, window, cx| {
             model.toggle_new_tab_list(window, cx);
         }))
+        .on_action(cx.listener(|model, _: &NewWorktree, window, cx| {
+            if model.close_prompt.is_none()
+                && let Some(project) = model.new_worktree_target()
+            {
+                model.open_git_form(project, true, cx);
+                model.focus_git_form(window, cx);
+            }
+        }))
         .on_action(cx.listener(|model, _: &PreviousProject, _, cx| model.cycle_project(false, cx)))
         .on_action(cx.listener(|model, _: &NextProject, _, cx| model.cycle_project(true, cx)))
         .on_action(cx.listener(|model, action: &SelectProject, _, cx| {
@@ -454,6 +464,10 @@ fn action_handlers(cx: &mut Context<AppModel>) -> gpui::Div {
         .on_action(cx.listener(|model, _: &DecreaseFontSize, _, cx| model.zoom_terminal(-1.0, cx)))
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "One command palette registration list"
+)]
 pub(crate) fn register_commands(
     registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
     model: &AppModel,
@@ -487,6 +501,13 @@ pub(crate) fn register_commands(
             tr_key!("New Home Tab"),
             NewHomeTab,
         ),
+        action(
+            model,
+            ShortcutId::NewWorktree,
+            tr_key!("New Worktree…"),
+            NewWorktree,
+        )
+        .disabled(model.new_worktree_target().is_none()),
         action(model, ShortcutId::CloseTab, tr_key!("Close Tab"), CloseTab)
             .disabled(model.active_tab().is_none()),
         action(

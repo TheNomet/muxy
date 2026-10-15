@@ -38,6 +38,12 @@ pub(crate) fn render(
         .gap(m.scaled(14.0))
         .text_color(theme.fg)
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_key_down(cx.listener(|model, event: &gpui::KeyDownEvent, _, cx| {
+            if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
+                cx.stop_propagation();
+                model.dismiss_overlay(cx);
+            }
+        }))
         .child(
             div()
                 .text_size(m.font_headline())

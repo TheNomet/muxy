@@ -85,6 +85,27 @@ impl AppModel {
         }
         cx.notify();
     }
+
+    /// The project a new worktree branches from: the current project, or the
+    /// parent of the current worktree. `None` where the project menu offers no
+    /// New Worktree…: Home, a missing folder, hidden worktrees, or no repository.
+    pub(crate) fn new_worktree_target(&self) -> Option<ProjectId> {
+        let current = self.state.current_project();
+        let project = self
+            .state
+            .project(current.parent_id.unwrap_or(current.id))?;
+        let repository = !self.worktree_children(project.id).is_empty()
+            || !self
+                .git
+                .projects
+                .get(&project.id)
+                .is_some_and(crate::model::git::Repository::not_a_repository);
+        (!project.home
+            && project.status() == ProjectStatus::Available
+            && self.worktrees_visible(project.id)
+            && repository)
+            .then_some(project.id)
+    }
 }
 
 pub(super) fn disclosure(
@@ -311,7 +332,10 @@ pub(crate) fn new_worktree(
         .text_color(theme.fg)
         .hover(|style| style.text_color(theme.accent))
         .cursor_pointer()
-        .on_click(cx.listener(move |model, _, _, cx| model.open_git_form(id, true, cx)))
+        .on_click(cx.listener(move |model, _, window, cx| {
+            model.open_git_form(id, true, cx);
+            model.focus_git_form(window, cx);
+        }))
         .child(
             div()
                 .w(m.icon_xxl())

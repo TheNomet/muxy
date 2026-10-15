@@ -654,3 +654,57 @@ fn disconnect_discards_a_merge_removal_waiting_for_confirmation(cx: &mut TestApp
     assert!(!cx.has_pending_prompt());
     assert!(!view.read_with(cx, |model, _| model.worktree_removing(worktree)));
 }
+
+#[gpui::test]
+fn new_worktree_shortcut_branches_from_the_parent_and_skips_projects_without_worktrees(
+    cx: &mut TestAppContext,
+) {
+    let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
+    let home = state.home().id;
+    state.select_project(worktree).expect("worktree");
+    let (boot, _) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    let form = |view: &Entity<AppModel>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |model, _| match &model.overlay {
+            Some(Overlay::GitForm(form)) => Some(form.target()),
+            _ => None,
+        })
+    };
+    cx.simulate_keystrokes("cmd-alt-n");
+    assert_eq!(
+        form(&view, cx),
+        Some((root, true)),
+        "a worktree's new worktree branches from its project"
+    );
+    cx.simulate_keystrokes("escape");
+    assert_eq!(form(&view, cx), None, "escape closes the form it opened");
+
+    for setup in [
+        Box::new(move |model: &mut AppModel, cx: &mut Context<AppModel>| {
+            model.select_project(home, cx);
+        }) as Box<dyn Fn(&mut AppModel, &mut Context<AppModel>)>,
+        Box::new(move |model, cx| {
+            model.select_project(root, cx);
+            model.toggle_worktree_visibility(root, cx);
+        }),
+    ] {
+        view.update(cx, |model, cx| {
+            model.dismiss_overlay(cx);
+            setup(model, cx);
+        });
+        cx.simulate_keystrokes("cmd-alt-n");
+        assert_eq!(form(&view, cx), None);
+    }
+}
+
+#[gpui::test]
+fn new_worktree_shortcut_skips_a_folder_git_reports_is_not_a_repository(cx: &mut TestAppContext) {
+    let (state, project) = registered_current_project();
+    let (view, cx, _sent) = connected(state, cx);
+    view.update(cx, |model, _| {
+        assert_eq!(model.new_worktree_target(), Some(project));
+        model.git.projects.entry(project).or_default().loaded = true;
+        assert_eq!(model.new_worktree_target(), None);
+    });
+}

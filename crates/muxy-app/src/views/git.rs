@@ -493,6 +493,19 @@ impl AppModel {
         cx.notify();
     }
 
+    /// Focuses the open form's first field. Opening it from a key binding
+    /// can't focus through `self.window`, which that binding is updating.
+    pub(crate) fn focus_git_form(&self, window: &mut Window, cx: &gpui::App) {
+        if let Some(Overlay::GitForm(form)) = &self.overlay {
+            let input = if form.worktree {
+                &form.name
+            } else {
+                &form.branch
+            };
+            input.focus_handle(cx).focus(window);
+        }
+    }
+
     fn set_worktree_branch_mode(&mut self, existing: bool, cx: &mut Context<Self>) {
         if let Some(Overlay::GitForm(form)) = &mut self.overlay {
             form.existing = existing;

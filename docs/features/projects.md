@@ -42,7 +42,8 @@ For Git projects, worktrees appear under their project and have their own
 tabs. Turn them on with **Worktrees → Show Worktrees** in the project menu.
 Worktrees created outside Muxy show up on their own.
 
-**New Worktree…** asks for:
+**New Worktree…** (`Cmd+Opt+N`, from the current project or worktree) asks
+for:
 
 - A name, and a new branch (from a base branch) or an existing one.
 - A location: **Default** (`~/.muxy/worktrees/<project>/<name>`), a
