@@ -434,6 +434,7 @@ impl AppModel {
         let activation = cx.observe_window_activation(window, Self::activation_changed);
         let panes = cx.observe(&cx.entity(), |model: &mut Self, _, cx| {
             model.sync_pane_focus(cx);
+            model.update_worktree_switcher(cx);
         });
         let quit = cx.on_app_quit(|model: &mut Self, cx| {
             #[cfg(not(test))]

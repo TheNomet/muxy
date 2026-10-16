@@ -1,5 +1,6 @@
 use gpui::{AppContext, Context, Focusable, Window, point, px};
 use muxy_app_core::{Project, ProjectId, ProjectStatus};
+use muxy_protocol::ProgressState;
 use muxy_ui::icon::Icon;
 use muxy_ui::l10n::translate;
 use muxy_ui::picker::{
@@ -17,16 +18,12 @@ const NEW_WORKTREE: &str = "new-worktree";
 const RENAME: &str = "rename";
 const REMOVE: &str = "remove";
 
-/// The searchable list of a project's worktrees.
 pub(crate) struct WorktreePicker {
     pub(crate) project: ProjectId,
     pub(crate) picker: gpui::Entity<Picker>,
 }
 
 impl AppModel {
-    /// The project whose worktrees the switcher lists: the current project,
-    /// or the parent of the current worktree. Home and projects with hidden
-    /// worktrees have none to list.
     pub(crate) fn worktree_switcher_project(&self) -> Option<ProjectId> {
         let current = self.state.current_project();
         let project = self
@@ -89,11 +86,15 @@ impl AppModel {
         }
     }
 
-    pub(crate) fn update_worktree_switcher(&self, cx: &mut Context<Self>) {
+    pub(crate) fn update_worktree_switcher(&mut self, cx: &mut Context<Self>) {
         let Some(Overlay::Worktrees(switcher)) = &self.overlay else {
             return;
         };
         let parent = switcher.project;
+        if self.worktree_switcher_project() != Some(parent) {
+            self.dismiss_overlay(cx);
+            return;
+        }
         let Some(project) = self.state.project(parent) else {
             return;
         };
@@ -150,9 +151,6 @@ impl AppModel {
         });
     }
 
-    /// The project and its worktrees, with `primary` marking the project.
-    /// Ordered by recent use, the current one leads and the rest follow the
-    /// most recently used first; never-used ones keep the sidebar order.
     pub(crate) fn worktree_switcher_order<'a>(
         &'a self,
         project: &'a Project,
@@ -197,7 +195,13 @@ impl AppModel {
         row.trailing = match tab_activity::worktree_status(id, self) {
             Status::Busy(key) => Some(translate(key)),
             Status::Blocked => Some(tr!("Blocked")),
-            Status::Progress(_) => Some(tr!("Working")),
+            Status::Progress(progress) => Some(match progress.state {
+                ProgressState::Error => tr!("Work reported an error."),
+                ProgressState::Paused => tr!("Work is paused."),
+                ProgressState::Running
+                | ProgressState::Indeterminate
+                | ProgressState::Unrecognized(_) => tr!("Working"),
+            }),
             Status::Unread(_) | Status::Completed => Some(tr!("Finished working")),
             Status::None => None,
         };

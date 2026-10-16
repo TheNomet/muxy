@@ -857,6 +857,10 @@ impl Picker {
         self.state.query()
     }
 
+    pub fn items(&self) -> &[PickerItem] {
+        self.state.items()
+    }
+
     pub fn set_placeholder(&self, placeholder: impl Into<SharedString>, cx: &mut Context<Self>) {
         self.input
             .update(cx, |input, _| input.set_placeholder(placeholder.into()));

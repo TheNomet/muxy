@@ -1,6 +1,7 @@
 use super::git::registered_current_project;
 use super::*;
 use muxy_protocol::{GitWorktree, ProjectMutation, ServerPath};
+use muxy_ui::picker::{Picker, PickerItem, PickerRow};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
@@ -771,4 +772,187 @@ fn worktree_switcher_lists_this_projects_worktrees_by_recent_use_and_removes_thr
     });
     cx.simulate_keystrokes("cmd-alt-w");
     assert!(switcher(&view, cx).is_none(), "Home has no worktrees");
+}
+
+fn open_worktree_switcher(view: &Entity<AppModel>, cx: &mut VisualTestContext) -> Entity<Picker> {
+    view.update_in(cx, |model, window, cx| {
+        crate::views::workspace::bind_keys(&model.settings.keymap, cx);
+        model.toggle_worktree_switcher(window, cx);
+        let Some(Overlay::Worktrees(switcher)) = &model.overlay else {
+            panic!("worktree switcher did not open");
+        };
+        switcher.picker.clone()
+    })
+}
+
+fn switcher_row(
+    picker: &Entity<Picker>,
+    id: ProjectId,
+    cx: &mut VisualTestContext,
+) -> Option<PickerRow> {
+    picker.read_with(cx, |picker, _| {
+        picker.items().iter().find_map(|item| match item {
+            PickerItem::Row(row) if row.id == id.to_string() => Some(row.clone()),
+            _ => None,
+        })
+    })
+}
+
+#[gpui::test]
+fn worktree_switcher_refreshes_progress_and_agent_activity_while_open(cx: &mut TestAppContext) {
+    use muxy_protocol::{
+        ActivitySnapshot, AgentActivity, AgentProvider, AgentState, ProgressState, SessionProgress,
+        TerminalProgress,
+    };
+
+    let (mut state, root, [worktree, _, _], _directory) = pruning_fixture();
+    state.open_terminal_tab(worktree).expect("tab");
+    let pane = state.window().active_pane.expect("pane");
+    let session = SessionId::new(42).expect("session");
+    state
+        .set_pane_session(pane, Some(session))
+        .expect("session");
+    state.select_project(root).expect("parent");
+    let (view, cx, _sent) = connected(state, cx);
+    let picker = open_worktree_switcher(&view, cx);
+    for (state, expected) in [
+        (Some(ProgressState::Running), "Working"),
+        (Some(ProgressState::Paused), "Work is paused."),
+        (Some(ProgressState::Error), "Work reported an error."),
+        (None, "Finished working"),
+    ] {
+        view.update(cx, |model, cx| {
+            model.receive_progress(
+                ServerId::local(),
+                session,
+                SessionProgress {
+                    progress: state.map(|state| TerminalProgress {
+                        state,
+                        percent: Some(50),
+                    }),
+                    completed: u64::from(state.is_none()),
+                },
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            switcher_row(&picker, worktree, cx)
+                .expect("worktree")
+                .trailing
+                .as_ref()
+                .map(AsRef::as_ref),
+            Some(expected)
+        );
+    }
+    for (state, expected) in [
+        (AgentState::Working, Some("Working")),
+        (AgentState::Blocked, Some("Blocked")),
+        (AgentState::Idle, None),
+    ] {
+        view.update(cx, |model, cx| {
+            model.receive_activity(
+                ServerId::local(),
+                Ok(ActivitySnapshot {
+                    agents: vec![AgentActivity {
+                        session,
+                        project: worktree,
+                        provider: AgentProvider::Codex,
+                        state,
+                    }],
+                    ..ActivitySnapshot::default()
+                }),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            switcher_row(&picker, worktree, cx)
+                .expect("worktree")
+                .trailing
+                .as_ref()
+                .map(AsRef::as_ref),
+            expected
+        );
+    }
+}
+
+#[gpui::test]
+fn worktree_switcher_refreshes_catalog_without_losing_query_or_selection(cx: &mut TestAppContext) {
+    let (state, root, [selected, removed, _], directory) = pruning_fixture();
+    let (view, cx, _sent) = connected(state, cx);
+    let picker = open_worktree_switcher(&view, cx);
+    let query = directory.path().to_string_lossy().into_owned();
+    picker.update(cx, |picker, cx| picker.set_query(query.clone(), cx));
+    cx.run_until_parked();
+    picker.update(cx, |picker, cx| {
+        picker
+            .select_row(&selected.to_string(), cx)
+            .expect("selected");
+    });
+    let added = view.update(cx, |model, cx| {
+        let mut projects: Vec<_> = model
+            .state
+            .projects()
+            .iter()
+            .filter(|project| project.id != removed)
+            .map(muxy_app_core::Project::descriptor)
+            .collect();
+        let renamed = projects
+            .iter_mut()
+            .find(|project| project.id == selected)
+            .expect("selected");
+        renamed.name = "Renamed worktree".into();
+        let mut added = renamed.clone();
+        added.id = ProjectId::new();
+        added.name = "Added worktree".into();
+        let path = directory.path().join(added.id.to_string());
+        std::fs::create_dir(&path).expect("worktree");
+        added.directory = ServerPath(path.as_os_str().as_bytes().to_vec());
+        let id = added.id;
+        projects.push(added);
+        model.receive_catalog(
+            ServerId::local(),
+            Ok(muxy_protocol::CatalogPage {
+                server: muxy_protocol::ServerIdentity::from_u128(1),
+                home: model.state.home().id,
+                revision: model.state.catalog_revision(ServerId::local()) + 1,
+                projects,
+                next: None,
+                legacy_home: None,
+            }),
+            cx,
+        );
+        id
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        switcher_row(&picker, selected, cx).expect("renamed").title,
+        "Renamed worktree"
+    );
+    assert_eq!(
+        switcher_row(&picker, added, cx).expect("added").title,
+        "Added worktree"
+    );
+    assert!(switcher_row(&picker, removed, cx).is_none());
+    assert!(
+        switcher_row(&picker, root, cx).is_none(),
+        "the search still filters the rows"
+    );
+    assert_eq!(
+        picker.read_with(cx, |picker, _| picker.query().to_owned()),
+        query
+    );
+    cx.simulate_keystrokes("enter");
+    assert_eq!(
+        view.read_with(cx, |model, _| model.state.current_project().id),
+        selected
+    );
+    open_worktree_switcher(&view, cx);
+    view.update(cx, |model, cx| {
+        model.appearance.hidden_worktrees.insert(root);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |model, _| model.overlay.is_none()));
 }
