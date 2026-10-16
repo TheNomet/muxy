@@ -843,7 +843,8 @@ impl AppModel {
             && (self.focus_requested
                 || (self.active_pane().is_none()
                     && self.composer.view.is_none()
-                    && self.webviews.panels.is_empty()))
+                    && self.webviews.panels.is_empty()
+                    && !self.agents_panel.focus.contains_focused(window, cx)))
         {
             match self.focus_return.take().and_then(|focus| focus.upgrade()) {
                 Some(focus) => focus.focus(window),

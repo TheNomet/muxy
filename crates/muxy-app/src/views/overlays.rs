@@ -33,7 +33,6 @@ pub(crate) enum Overlay {
     Projects(Entity<super::project_picker::ProjectPicker>),
     /// The popover above the sidebar's Remote section.
     RemoteServers,
-    /// The agents panel opened from a collapsed sidebar.
     Agents,
     ServerForm(Box<super::remote_servers::ServerForm>),
     Password(Box<super::remote_servers::PasswordPrompt>),

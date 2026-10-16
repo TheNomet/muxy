@@ -177,8 +177,6 @@ pub(crate) fn sidebar(model: &AppModel, window: &Window, cx: &mut Context<AppMod
         .into_any_element()
 }
 
-/// The expanded sidebar's list in a rounded card, like the agents panel below
-/// it. `surface` and `hover` are translucent, so rows keep their contrast on it.
 fn card(contents: AnyElement, model: &AppModel) -> AnyElement {
     if !model.appearance.sidebar_expanded {
         return contents;

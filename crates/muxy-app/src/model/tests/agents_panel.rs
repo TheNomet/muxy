@@ -3,6 +3,7 @@ use super::*;
 use crate::model::agents_panel::{AgentStatus, Entry, EntryKey, Placement};
 use gpui::Modifiers;
 use muxy_app_core::settings::AgentsPanelGrouping;
+use muxy_core::shortcuts::ShortcutId;
 use muxy_protocol::{
     ActivityEvent, ActivityKind, ActivitySnapshot, AgentActivity, AgentProvider, AgentState,
 };
@@ -11,12 +12,9 @@ struct Fixture {
     root: ProjectId,
     worktree: ProjectId,
     panes: [PaneId; 4],
-    /// Keeps the server's requests flowing; dropping it reads as a disconnect.
     _sent: Sent,
 }
 
-/// A blocked agent in a worktree, a working one shown in two panes of the
-/// project, a finished one in Home, and an agent no pane shows.
 fn agents(cx: &mut TestAppContext) -> (Entity<AppModel>, &mut VisualTestContext, Fixture) {
     let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
     let home = state.home().id;
@@ -150,7 +148,7 @@ fn the_shortcut_shows_and_focuses_then_hides_and_keys_open_only_live_panes(
         })
     };
 
-    cx.simulate_keystrokes("cmd-alt-a");
+    cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
     view.read_with(cx, |model, _| {
         assert_eq!(model.agents_panel_placement(), Placement::Docked);
         assert!(model.agents_panel_shown());
@@ -169,10 +167,10 @@ fn the_shortcut_shows_and_focuses_then_hides_and_keys_open_only_live_panes(
     });
     assert!(!focused(&view, cx), "opening an agent focuses its pane");
 
-    cx.simulate_keystrokes("cmd-alt-a");
+    cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
     assert!(focused(&view, cx), "a shown panel takes focus first");
     view.read_with(cx, |model, _| assert!(model.agents_panel_shown()));
-    cx.simulate_keystrokes("cmd-alt-a");
+    cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
     view.read_with(cx, |model, _| {
         assert!(!model.agents_panel_shown(), "a focused panel hides");
         assert!(!model.appearance.agents_panel_visible);
@@ -197,6 +195,56 @@ fn the_shortcut_shows_and_focuses_then_hides_and_keys_open_only_live_panes(
 }
 
 #[gpui::test]
+fn the_panel_keeps_keyboard_focus_over_an_empty_project(cx: &mut TestAppContext) {
+    let (view, cx, fixture) = agents(cx);
+    cx.update(|_, cx| {
+        crate::views::workspace::bind_keys(&muxy_app_core::settings::Keymap::default(), cx);
+    });
+    for detached in [false, true] {
+        view.update(cx, |model, cx| {
+            let empty = model
+                .state
+                .projects()
+                .iter()
+                .find(|project| project.parent_id == Some(fixture.root) && project.tabs.is_empty())
+                .expect("empty worktree")
+                .id;
+            model.appearance.sidebar_expanded = true;
+            model.appearance.agents_panel_detached = detached;
+            model.appearance.agents_panel_visible = false;
+            model.select_project(empty, cx);
+            assert!(model.active_pane().is_none());
+        });
+        cx.run_until_parked();
+        cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
+        cx.run_until_parked();
+        view.update_in(cx, |model, window, cx| {
+            assert!(model.agents_panel.focus.contains_focused(window, cx));
+        });
+        cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
+        cx.run_until_parked();
+        view.read_with(cx, |model, _| assert!(!model.agents_panel_shown()));
+
+        cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
+        cx.run_until_parked();
+        cx.simulate_keystrokes("enter");
+        view.read_with(cx, |model, _| {
+            assert_eq!(model.active_pane(), Some(fixture.panes[2]));
+            assert_eq!(model.state.current_project().id, fixture.worktree);
+        });
+        view.update_in(cx, |model, window, cx| {
+            model.focus_agents_panel(window);
+            model.focus_requested = true;
+            cx.notify();
+        });
+        cx.run_until_parked();
+        view.update_in(cx, |model, window, cx| {
+            assert!(!model.agents_panel.focus.contains_focused(window, cx));
+        });
+    }
+}
+
+#[gpui::test]
 fn a_collapsed_sidebar_opens_the_panel_as_a_popup_that_escape_closes(cx: &mut TestAppContext) {
     let (view, cx, _fixture) = agents(cx);
     cx.update(|_, cx| {
@@ -212,20 +260,25 @@ fn a_collapsed_sidebar_opens_the_panel_as_a_popup_that_escape_closes(cx: &mut Te
         cx.debug_bounds("agents-panel-button").is_none(),
         "the button waits until the panel is shown"
     );
-    cx.simulate_keystrokes("cmd-alt-a");
+    cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
     view.read_with(cx, |model, _| {
         assert_eq!(model.agents_panel_placement(), Placement::Popup);
         assert!(matches!(model.overlay, Some(Overlay::Agents)));
         assert!(
-            !model.appearance.agents_panel_visible,
-            "a popup does not change the docked panel"
+            model.appearance.agents_panel_visible,
+            "showing the popup keeps its button until the panel is hidden"
         );
     });
     cx.simulate_keystrokes("escape");
     view.read_with(cx, |model, _| assert!(model.overlay.is_none()));
 
-    view.update(cx, |model, _| model.appearance.agents_panel_visible = true);
-    cx.simulate_keystrokes("cmd-alt-a");
+    cx.update(|window, _| window.refresh());
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("agents-panel-button").is_some(),
+        "escape keeps the button after the first popup opening"
+    );
+    cx.simulate_keystrokes(ShortcutId::ToggleAgentsPanel.definition().keys[0]);
     cx.simulate_keystrokes("escape");
     view.read_with(cx, |model, _| {
         assert!(model.overlay.is_none());
@@ -240,6 +293,55 @@ fn a_collapsed_sidebar_opens_the_panel_as_a_popup_that_escape_closes(cx: &mut Te
             !model.appearance.agents_panel_visible,
             "hiding the panel removes the button"
         );
+    });
+}
+
+#[gpui::test]
+fn keyboard_navigation_uses_the_highlighted_row_after_selection_changes(cx: &mut TestAppContext) {
+    let (view, cx, fixture) = agents(cx);
+    cx.update(|_, cx| {
+        crate::views::workspace::bind_keys(&muxy_app_core::settings::Keymap::default(), cx);
+    });
+    view.update_in(cx, |model, window, cx| {
+        model.appearance.sidebar_expanded = true;
+        model.appearance.agents_panel_visible = true;
+        model.focus_agents_panel(window);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("enter");
+    view.read_with(cx, |model, _| {
+        assert_eq!(model.active_pane(), Some(fixture.panes[2]));
+        assert_eq!(model.state.current_project().id, fixture.worktree);
+    });
+
+    view.update_in(cx, |model, window, cx| {
+        model
+            .servers
+            .local
+            .activity
+            .snapshot
+            .agents
+            .retain(|agent| agent.session != SessionId::new(2).expect("session"));
+        model.focus_agents_panel(window);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("enter");
+    view.read_with(cx, |model, _| {
+        assert_eq!(model.active_pane(), Some(fixture.panes[0]));
+        assert_eq!(model.state.current_project().id, fixture.root);
+    });
+
+    view.update_in(cx, |model, window, cx| {
+        model.appearance.agents_panel_grouping = AgentsPanelGrouping::Worktrees;
+        model.focus_agents_panel(window);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("down enter");
+    view.read_with(cx, |model, _| {
+        assert_eq!(model.state.current_project().id, model.state.home().id);
     });
 }
 

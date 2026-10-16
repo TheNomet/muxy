@@ -32,14 +32,11 @@ pub enum SidebarCollapsedStyle {
     Hidden,
 }
 
-/// What each row of the agents panel stands for.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentsPanelGrouping {
-    /// One row per agent, grouped by what it is doing; a row opens its pane.
     #[default]
     Agents,
-    /// One row per project or worktree running agents; a row opens it.
     Worktrees,
 }
 
@@ -74,11 +71,8 @@ pub struct Appearance {
     /// The app language as `<extension>:<localization>`; empty for English.
     pub language: String,
     pub agents_panel_visible: bool,
-    /// Whether the agents panel floats over the workspace instead of sitting in the sidebar.
     pub agents_panel_detached: bool,
-    /// The floating agents panel as unscaled `[x, y, width, height]` in the window.
     pub agents_panel_frame: Option<[f32; 4]>,
-    /// The docked agents panel's unscaled height; unset grows it to fit, up to a limit.
     pub agents_panel_docked_height: Option<f32>,
     pub agents_panel_grouping: AgentsPanelGrouping,
 }

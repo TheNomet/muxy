@@ -282,8 +282,6 @@ pub(super) fn language_label(snapshot: &Snapshot, selected: &str) -> String {
         )
 }
 
-/// Whether the agents panel lists each agent, opening its pane, or each
-/// worktree running agents, opening the worktree.
 fn agents_panel_grouping(pane: &SettingsView, cx: &mut Context<SettingsView>) -> AnyElement {
     let appearance = &pane.snapshot.settings.appearance;
     pane.row(

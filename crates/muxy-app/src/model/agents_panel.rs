@@ -6,18 +6,14 @@ use muxy_protocol::{ActivityKind, AgentProvider, AgentState, SessionId};
 use super::AppModel;
 use crate::views::overlays::Overlay;
 
-/// Smallest floating panel, unscaled.
 pub(crate) const MIN_WIDTH: f32 = 220.0;
 pub(crate) const MIN_HEIGHT: f32 = 140.0;
-/// A new floating panel, unscaled.
 const DEFAULT_FRAME: [f32; 4] = [80.0, 80.0, 320.0, 360.0];
 
-/// What an agent is doing, in the order the panel lists them.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) enum AgentStatus {
     Blocked,
     Working,
-    /// Finished a turn the user has not looked at yet.
     Completed,
     Idle,
 }
@@ -26,7 +22,6 @@ impl AgentStatus {
     pub(crate) const ALL: [Self; 4] = [Self::Blocked, Self::Working, Self::Completed, Self::Idle];
 }
 
-/// An agent shown in one of the app's panes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RunningAgent {
     pub(crate) server: ServerId,
@@ -38,18 +33,15 @@ pub(crate) struct RunningAgent {
     pub(crate) status: AgentStatus,
 }
 
-/// A row of the panel.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Entry {
     Agent(RunningAgent),
-    /// A project or worktree and how many of its agents are in each status.
     Worktree {
         project: ProjectId,
         counts: [usize; 4],
     },
 }
 
-/// Identifies a row across renders, whatever its status.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum EntryKey {
     Agent(ServerId, SessionId),
@@ -73,7 +65,6 @@ impl Entry {
         }
     }
 
-    /// The most urgent status in the row.
     pub(crate) fn status(&self) -> AgentStatus {
         match self {
             Self::Agent(agent) => agent.status,
@@ -86,14 +77,10 @@ impl Entry {
     }
 }
 
-/// How the panel is shown right now.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Placement {
-    /// A section at the bottom of the expanded sidebar.
     Docked,
-    /// A popover that closes when you click elsewhere, for a collapsed sidebar.
     Popup,
-    /// A panel you can move and resize over the workspace.
     Floating,
 }
 
@@ -103,16 +90,15 @@ pub(crate) enum Drag {
         pointer: Point<Pixels>,
         origin: [f32; 2],
     },
-    /// `axes` are whether the width and the height follow the pointer.
     Resize {
         pointer: Point<Pixels>,
         size: [f32; 2],
         axes: [bool; 2],
     },
-    /// The docked panel's top edge, from its unscaled `height`.
-    Docked { pointer: Pixels, height: f32 },
-    /// The list's scroll thumb: `offset` scrolled when grabbed, and how far
-    /// the list scrolls per pixel the thumb moves.
+    Docked {
+        pointer: Pixels,
+        height: f32,
+    },
     Scroll {
         pointer: Pixels,
         offset: Pixels,
@@ -125,10 +111,7 @@ pub(crate) struct AgentsPanel {
     pub(crate) selected: Option<EntryKey>,
     pub(crate) drag: Option<Drag>,
     pub(crate) scroll: gpui::ScrollHandle,
-    /// The docked panel's height when last drawn, where dragging its top edge starts.
     pub(crate) docked_height: std::rc::Rc<std::cell::Cell<Pixels>>,
-    /// Owns the area the popup and floating panel mark over native views, so
-    /// their own spinners stay visible while everything else under it hides.
     pub(crate) owner: gpui::Entity<()>,
 }
 
@@ -146,8 +129,6 @@ impl AgentsPanel {
 }
 
 impl AppModel {
-    /// Every agent in the app's panes, each session once at the first pane
-    /// showing it, most urgent first.
     pub(crate) fn running_agents(&self) -> Vec<RunningAgent> {
         type Index<'a> = (
             std::collections::HashMap<SessionId, &'a muxy_protocol::AgentActivity>,
@@ -224,12 +205,10 @@ impl AppModel {
         agents
     }
 
-    /// The panel's rows for its grouping, most urgent first.
     pub(crate) fn agents_panel_entries(&self) -> Vec<Entry> {
         self.agents_panel_entries_from(self.running_agents())
     }
 
-    /// The rows for `agents`, from `running_agents`, in the panel's grouping.
     pub(crate) fn agents_panel_entries_from(&self, agents: Vec<RunningAgent>) -> Vec<Entry> {
         if self.appearance.agents_panel_grouping == AgentsPanelGrouping::Agents {
             return agents.into_iter().map(Entry::Agent).collect();
@@ -269,7 +248,6 @@ impl AppModel {
         }
     }
 
-    /// Whether the panel is on screen.
     pub(crate) fn agents_panel_shown(&self) -> bool {
         match self.agents_panel_placement() {
             Placement::Popup => matches!(self.overlay, Some(Overlay::Agents)),
@@ -277,8 +255,6 @@ impl AppModel {
         }
     }
 
-    /// Shows and focuses the panel, focuses it if it is shown elsewhere, and
-    /// hides it once it has focus.
     pub(crate) fn toggle_agents_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_prompt.is_some() {
             return;
@@ -299,18 +275,17 @@ impl AppModel {
                 if matches!(self.overlay, Some(Overlay::Agents)) {
                     self.dismiss_overlay(cx);
                 }
-                if !self.appearance.agents_panel_visible {
-                    self.appearance.agents_panel_visible = true;
-                    self.save_appearance(cx);
-                }
             }
         }
-        self.select_first_agent_entry();
+        if !self.appearance.agents_panel_visible {
+            self.appearance.agents_panel_visible = true;
+            self.save_appearance(cx);
+        }
+        self.agents_panel.selected = self.selected_agents_entry(&self.agents_panel_entries());
         self.focus_agents_panel(window);
         cx.notify();
     }
 
-    /// Hides the panel wherever it is, and the collapsed sidebar's button with it.
     pub(crate) fn hide_agents_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.overlay, Some(Overlay::Agents)) {
             self.dismiss_overlay(cx);
@@ -324,7 +299,6 @@ impl AppModel {
         cx.notify();
     }
 
-    /// Closes the popup, keeping the collapsed sidebar's button.
     pub(crate) fn close_agents_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.overlay, Some(Overlay::Agents)) {
             self.dismiss_overlay(cx);
@@ -333,18 +307,13 @@ impl AppModel {
         cx.notify();
     }
 
-    fn select_first_agent_entry(&mut self) {
-        let entries = self.agents_panel_entries();
-        let kept = self
-            .agents_panel
+    pub(crate) fn selected_agents_entry(&self, entries: &[Entry]) -> Option<EntryKey> {
+        self.agents_panel
             .selected
-            .is_some_and(|key| entries.iter().any(|entry| entry.key() == key));
-        if !kept {
-            self.agents_panel.selected = entries.first().map(Entry::key);
-        }
+            .filter(|key| entries.iter().any(|entry| entry.key() == *key))
+            .or_else(|| entries.first().map(Entry::key))
     }
 
-    /// Moves the selection `delta` rows, stopping at either end.
     pub(crate) fn move_agents_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
         let entries = self.agents_panel_entries();
         if entries.is_empty() {
@@ -352,14 +321,10 @@ impl AppModel {
             return;
         }
         let current = self
-            .agents_panel
-            .selected
-            .and_then(|key| entries.iter().position(|entry| entry.key() == key));
-        let next = match current {
-            Some(index) => index.saturating_add_signed(delta).min(entries.len() - 1),
-            None if delta < 0 => entries.len() - 1,
-            None => 0,
-        };
+            .selected_agents_entry(&entries)
+            .and_then(|key| entries.iter().position(|entry| entry.key() == key))
+            .unwrap_or(0);
+        let next = current.saturating_add_signed(delta).min(entries.len() - 1);
         self.agents_panel.selected = Some(entries[next].key());
         let headings = 1 + entries[..=next]
             .windows(2)
@@ -369,9 +334,8 @@ impl AppModel {
         cx.notify();
     }
 
-    /// Opens the selected row: its agent's pane, or its project or worktree.
     pub(crate) fn open_agents_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(key) = self.agents_panel.selected else {
+        let Some(key) = self.selected_agents_entry(&self.agents_panel_entries()) else {
             return;
         };
         self.open_agents_entry(key, window, cx);
@@ -402,7 +366,6 @@ impl AppModel {
         cx.notify();
     }
 
-    /// Shows `pane` if it is still in `project`'s `tab`.
     pub(crate) fn focus_agent(
         &mut self,
         project: ProjectId,
@@ -448,14 +411,11 @@ impl AppModel {
         cx.notify();
     }
 
-    /// Focuses the panel, cancelling a pending return of focus to the active
-    /// pane that would take it back on the next frame.
     pub(crate) fn focus_agents_panel(&mut self, window: &mut Window) {
         self.agents_panel.focus.focus(window);
         self.focus_requested = false;
     }
 
-    /// The floating panel's unscaled frame, kept inside a `viewport`-sized window.
     pub(crate) fn agents_panel_frame(&self, viewport: gpui::Size<Pixels>) -> [f32; 4] {
         let scale = f32::from(self.metrics.scaled(1.0));
         let [x, y, width, height] = self
@@ -475,8 +435,6 @@ impl AppModel {
         ]
     }
 
-    /// Starts moving the floating panel, or with `resize`, resizing the
-    /// width and height it marks.
     pub(crate) fn begin_agents_panel_drag(
         &mut self,
         resize: Option<[bool; 2]>,
@@ -580,8 +538,6 @@ impl AppModel {
         cx.notify();
     }
 
-    /// The docked panel's unscaled height, at least a few rows and at most
-    /// most of a `viewport`-tall window.
     pub(crate) fn clamp_docked_height(&self, height: f32, viewport: gpui::Size<Pixels>) -> f32 {
         let scale = f32::from(self.metrics.scaled(1.0));
         let max = (f32::from(viewport.height) / scale * 0.7).max(MIN_HEIGHT);
@@ -602,7 +558,6 @@ impl AppModel {
         cx.notify();
     }
 
-    /// Grabs the list's scroll thumb, which moves `ratio` list pixels per pixel.
     pub(crate) fn begin_agents_panel_scroll_drag(
         &mut self,
         pointer: Pixels,

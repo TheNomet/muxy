@@ -258,7 +258,6 @@ struct Registry {
 struct Native {
     spinner: Option<NativeSpinner>,
     bounds: Cell<Option<Bounds<Pixels>>>,
-    /// The element this spinner sits in, whose own cover doesn't hide it.
     owner: Cell<Option<gpui::EntityId>>,
     in_bounds: Cell<bool>,
     visible: Cell<bool>,
@@ -300,8 +299,6 @@ impl Spinners {
         self.glyph_in(id, size, color, None)
     }
 
-    /// A spinner inside `owner`'s element, which marks its own area with
-    /// `webview_occlusion_except(owner)` and must not hide it.
     pub(super) fn glyph_in(
         &self,
         id: String,
@@ -465,7 +462,6 @@ pub(super) fn spinner(id: impl Into<String>, size: Pixels, model: &AppModel) -> 
     model.spinners.glyph(id.into(), size, model.theme.accent)
 }
 
-/// A spinner inside an element marked with `webview_occlusion_except(owner)`.
 pub(super) fn spinner_in(
     id: impl Into<String>,
     size: Pixels,

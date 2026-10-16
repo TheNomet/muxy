@@ -14,11 +14,9 @@ use crate::model::agents_panel::{
     AgentStatus, Entry, EntryKey, MIN_HEIGHT, MIN_WIDTH, Placement, RunningAgent,
 };
 
-/// Tallest the docked panel grows before it scrolls, unscaled.
 const DOCKED_MAX_HEIGHT: f32 = 260.0;
 const POPUP_WIDTH: f32 = 300.0;
 const POPUP_MAX_HEIGHT: f32 = 380.0;
-/// The corner handle, and how far the edge handles reach in.
 const RESIZE_GRIP: f32 = 18.0;
 const RESIZE_EDGE: f32 = 6.0;
 const FLOATING_GROUP: &str = "agents-panel-floating";
@@ -71,7 +69,6 @@ fn status_glyph(
 }
 
 impl AppModel {
-    /// `project`'s name, under its parent's for a worktree.
     fn agents_location(&self, project: muxy_app_core::ProjectId) -> String {
         let Some(project) = self.state.project(project) else {
             return String::new();
@@ -213,7 +210,6 @@ fn entry_row(
         .into_any_element()
 }
 
-/// The panel's rows, with a heading before each run of one status.
 fn rows(
     entries: &[Entry],
     model: &AppModel,
@@ -223,11 +219,7 @@ fn rows(
     let m = model.metrics;
     let theme = &model.theme;
     let focused = model.agents_panel.focus.contains_focused(window, cx);
-    let selected = model
-        .agents_panel
-        .selected
-        .filter(|key| entries.iter().any(|entry| entry.key() == *key))
-        .or_else(|| entries.first().map(Entry::key));
+    let selected = model.selected_agents_entry(entries);
     let mut list = div()
         .id("agents-panel-rows")
         .flex()
@@ -280,7 +272,6 @@ fn rows(
         .into_any_element()
 }
 
-/// The header's Detach or Reattach button, then Hide.
 fn header_buttons(detached: bool, model: &AppModel, cx: &mut Context<AppModel>) -> [IconButton; 2] {
     let m = model.metrics;
     let theme = &model.theme;
@@ -398,7 +389,6 @@ fn header(
         .into_any_element()
 }
 
-/// The panel's header and rows, with its keyboard handling.
 fn body(
     placement: Placement,
     model: &AppModel,
@@ -445,7 +435,6 @@ fn body(
         .child(drag_tracker(cx))
 }
 
-/// The docked panel above the sidebar's Remote section.
 pub(crate) fn docked(
     model: &AppModel,
     window: &Window,
@@ -510,8 +499,6 @@ pub(crate) fn docked(
     )
 }
 
-/// The list's scroll thumb, shown while its rows overflow. Dragging it
-/// scrolls the list, and a click on the track jumps there.
 fn scrollbar(model: &AppModel, cx: &mut Context<AppModel>) -> AnyElement {
     use muxy_ui::scrollbar::{MINIMUM_THUMB_LENGTH, ThumbGeometry, WIDTH};
     let m = model.metrics;
@@ -591,8 +578,6 @@ fn scrollbar(model: &AppModel, cx: &mut Context<AppModel>) -> AnyElement {
         .into_any_element()
 }
 
-/// The collapsed sidebar's button that opens the panel as a popup, once the
-/// panel has been shown.
 pub(crate) fn collapsed_button(model: &AppModel, cx: &mut Context<AppModel>) -> Option<AnyElement> {
     let open = matches!(model.overlay, Some(super::overlays::Overlay::Agents));
     if model.agents_panel_placement() != Placement::Popup
@@ -651,7 +636,6 @@ pub(crate) fn collapsed_button(model: &AppModel, cx: &mut Context<AppModel>) -> 
     )
 }
 
-/// The popup for a collapsed sidebar, at the workspace's bottom left.
 pub(crate) fn popup(model: &AppModel, window: &Window, cx: &mut Context<AppModel>) -> AnyElement {
     let m = model.metrics;
     let theme = &model.theme;
@@ -680,8 +664,6 @@ pub(crate) fn popup(model: &AppModel, window: &Window, cx: &mut Context<AppModel
         .into_any_element()
 }
 
-/// A handle on the floating panel that resizes the width, the height, or
-/// both, as `axes` marks. The corner one shows a grip.
 fn resize_handle(
     id: &'static str,
     axes: [bool; 2],
@@ -737,8 +719,6 @@ fn resize_handle(
         .into_any_element()
 }
 
-/// Follows the pointer while one of the panel's handles is dragged, until
-/// the button is released.
 fn drag_tracker(cx: &mut Context<AppModel>) -> AnyElement {
     let weak = cx.weak_entity();
     canvas(
@@ -781,7 +761,6 @@ fn drag_tracker(cx: &mut Context<AppModel>) -> AnyElement {
     .into_any_element()
 }
 
-/// The detached panel over the workspace.
 pub(crate) fn floating(
     model: &AppModel,
     window: &Window,
