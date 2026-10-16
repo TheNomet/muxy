@@ -12,7 +12,7 @@ use muxy_ui::tr;
 use super::overlays::Overlay;
 use super::project_editor::Field;
 use super::tab_activity::{self, Status};
-use crate::model::{AppModel, git::Repository};
+use crate::model::AppModel;
 
 const NEW_WORKTREE: &str = "new-worktree";
 const RENAME: &str = "rename";
@@ -69,6 +69,7 @@ impl AppModel {
                             let project = picker.project;
                             model.dismiss_overlay(cx);
                             model.open_git_form(project, true, cx);
+                            model.focus_git_form(window, cx);
                         }
                     }
                     PickerEvent::QueryChanged { .. } => model.update_worktree_switcher(cx),
@@ -128,12 +129,6 @@ impl AppModel {
                     PickerItem::Row(row)
                 }),
         );
-        let repository = !self.worktree_children(parent).is_empty()
-            || !self
-                .git
-                .projects
-                .get(&parent)
-                .is_some_and(Repository::not_a_repository);
         let status = if items.is_empty() {
             PickerStatus::Empty(tr!("No matching worktrees"))
         } else {
@@ -142,7 +137,7 @@ impl AppModel {
         let footer = vec![
             PickerAction::new(NEW_WORKTREE, tr!("New Worktree…"))
                 .icon(PickerLeading::Icon(Icon::Plus))
-                .disabled(!repository),
+                .disabled(self.new_worktree_target().is_none()),
         ];
         switcher.picker.update(cx, |picker, cx| {
             picker.set_items(items, cx);

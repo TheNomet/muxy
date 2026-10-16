@@ -387,6 +387,13 @@ impl AppModel {
         }));
     }
 
+    pub(crate) fn not_a_repository(&self, project: ProjectId) -> bool {
+        self.git
+            .projects
+            .get(&project)
+            .is_some_and(Repository::not_a_repository)
+    }
+
     pub(crate) fn open_git_form(
         &mut self,
         project: ProjectId,
@@ -394,9 +401,9 @@ impl AppModel {
         cx: &mut Context<Self>,
     ) {
         self.git.interaction = self.git.interaction.wrapping_add(1);
-        let Some(_) = self.state.project(project) else {
+        if self.state.project(project).is_none() || (worktree && self.not_a_repository(project)) {
             return;
-        };
+        }
         let default = self
             .git
             .projects
@@ -491,6 +498,17 @@ impl AppModel {
             self.git_request(project, GitAction::WorktreeHooks { teardown: false }, cx);
         }
         cx.notify();
+    }
+
+    pub(crate) fn focus_git_form(&self, window: &mut Window, cx: &gpui::App) {
+        if let Some(Overlay::GitForm(form)) = &self.overlay {
+            let input = if form.worktree {
+                &form.name
+            } else {
+                &form.branch
+            };
+            input.focus_handle(cx).focus(window);
+        }
     }
 
     fn set_worktree_branch_mode(&mut self, existing: bool, cx: &mut Context<Self>) {

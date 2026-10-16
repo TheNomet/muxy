@@ -27,10 +27,11 @@ impl Default for Keymap {
 }
 
 impl Keymap {
-    pub const ACTIONS: [ShortcutId; 62] = [
+    pub const ACTIONS: [ShortcutId; 63] = [
         ShortcutId::OpenSettings,
         ShortcutId::NewHomeTab,
         ShortcutId::NewTabInProject,
+        ShortcutId::NewWorktree,
         ShortcutId::SwitchWorktree,
         ShortcutId::ToggleSidebar,
         ShortcutId::ToggleFullScreen,
@@ -272,10 +273,11 @@ const RETIRED: [&str; 4] = [
 ];
 
 /// Built-in defaults that give way to a key a user binding already has.
-const YIELDING: [ShortcutId; 53] = [
+const YIELDING: [ShortcutId; 54] = [
     ShortcutId::OpenSettings,
     ShortcutId::NewHomeTab,
     ShortcutId::NewTabInProject,
+    ShortcutId::NewWorktree,
     ShortcutId::SwitchWorktree,
     ShortcutId::ToggleSidebar,
     ShortcutId::ToggleFullScreen,

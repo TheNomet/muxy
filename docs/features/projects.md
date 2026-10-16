@@ -49,7 +49,8 @@ switch. Each worktree can be renamed or removed from its row, and **New
 Worktree…** sits at the bottom. Turn off **Settings → Appearance → Order the
 worktree switcher by recent use** to list them in sidebar order.
 
-**New Worktree…** asks for:
+**New Worktree…** (`Cmd+Opt+N`, from the current project or worktree) asks
+for:
 
 - A name, and a new branch (from a base branch) or an existing one.
 - A location: **Default** (`~/.muxy/worktrees/<project>/<name>`), a

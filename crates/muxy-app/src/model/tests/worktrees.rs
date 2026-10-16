@@ -956,3 +956,100 @@ fn worktree_switcher_refreshes_catalog_without_losing_query_or_selection(cx: &mu
     cx.run_until_parked();
     assert!(view.read_with(cx, |model, _| model.overlay.is_none()));
 }
+
+#[gpui::test]
+fn new_worktree_shortcut_branches_from_the_parent_and_skips_projects_without_worktrees(
+    cx: &mut TestAppContext,
+) {
+    let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
+    let home = state.home().id;
+    state.select_project(worktree).expect("worktree");
+    let (boot, _) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    let form = |view: &Entity<AppModel>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |model, _| match &model.overlay {
+            Some(Overlay::GitForm(form)) => Some(form.target()),
+            _ => None,
+        })
+    };
+    cx.simulate_keystrokes("cmd-alt-n");
+    assert_eq!(
+        form(&view, cx),
+        Some((root, true)),
+        "a worktree's new worktree branches from its project"
+    );
+    cx.simulate_keystrokes("escape");
+    assert_eq!(form(&view, cx), None, "escape closes the form it opened");
+
+    cx.simulate_keystrokes("cmd-alt-w");
+    cx.run_until_parked();
+    let create = cx
+        .debug_bounds("picker-footer-new-worktree")
+        .expect("create");
+    cx.simulate_click(create.center(), Modifiers::default());
+    cx.run_until_parked();
+    assert_eq!(form(&view, cx), Some((root, true)));
+    cx.simulate_keystrokes("escape");
+    assert_eq!(form(&view, cx), None, "the picker also focuses the form");
+
+    for setup in [
+        Box::new(move |model: &mut AppModel, cx: &mut Context<AppModel>| {
+            model.select_project(home, cx);
+        }) as Box<dyn Fn(&mut AppModel, &mut Context<AppModel>)>,
+        Box::new(move |model, cx| {
+            model.select_project(root, cx);
+            model.toggle_worktree_visibility(root, cx);
+        }),
+    ] {
+        view.update(cx, |model, cx| {
+            model.dismiss_overlay(cx);
+            setup(model, cx);
+        });
+        cx.simulate_keystrokes("cmd-alt-n");
+        assert_eq!(form(&view, cx), None);
+    }
+}
+
+#[gpui::test]
+fn new_worktree_shortcut_skips_a_folder_git_reports_is_not_a_repository(cx: &mut TestAppContext) {
+    let (state, project) = registered_current_project();
+    let (view, cx, _sent) = connected(state, cx);
+    view.update(cx, |model, _| {
+        assert_eq!(model.new_worktree_target(), Some(project));
+        model.git.projects.entry(project).or_default().loaded = true;
+        assert_eq!(model.new_worktree_target(), None);
+    });
+}
+
+#[gpui::test]
+fn new_worktree_form_stays_closed_when_the_parent_is_no_longer_a_repository(
+    cx: &mut TestAppContext,
+) {
+    let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
+    state.select_project(worktree).expect("worktree");
+    let (boot, _) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    view.update(cx, |model, _| {
+        model.git.projects.entry(root).or_default().loaded = true;
+        assert_eq!(model.new_worktree_target(), None, "the command is disabled");
+    });
+    cx.simulate_keystrokes("cmd-alt-n");
+    view.update(cx, |model, cx| {
+        assert!(model.overlay.is_none(), "the shortcut opens no form");
+        model.open_git_form(root, true, cx);
+        assert!(model.overlay.is_none(), "the sidebar row opens no form");
+    });
+    open_worktree_switcher(&view, cx);
+    cx.run_until_parked();
+    let create = cx
+        .debug_bounds("picker-footer-new-worktree")
+        .expect("create");
+    cx.simulate_click(create.center(), Modifiers::default());
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |model, _| matches!(
+        model.overlay,
+        Some(Overlay::Worktrees(_))
+    )));
+}

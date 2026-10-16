@@ -85,6 +85,18 @@ impl AppModel {
         }
         cx.notify();
     }
+
+    pub(crate) fn new_worktree_target(&self) -> Option<ProjectId> {
+        let current = self.state.current_project();
+        let project = self
+            .state
+            .project(current.parent_id.unwrap_or(current.id))?;
+        (!project.home
+            && project.status() == ProjectStatus::Available
+            && self.worktrees_visible(project.id)
+            && !self.not_a_repository(project.id))
+        .then_some(project.id)
+    }
 }
 
 pub(super) fn disclosure(
@@ -311,7 +323,10 @@ pub(crate) fn new_worktree(
         .text_color(theme.fg)
         .hover(|style| style.text_color(theme.accent))
         .cursor_pointer()
-        .on_click(cx.listener(move |model, _, _, cx| model.open_git_form(id, true, cx)))
+        .on_click(cx.listener(move |model, _, window, cx| {
+            model.open_git_form(id, true, cx);
+            model.focus_git_form(window, cx);
+        }))
         .child(
             div()
                 .w(m.icon_xxl())
