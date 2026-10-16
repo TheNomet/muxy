@@ -139,6 +139,7 @@ pub(crate) fn sidebar(model: &AppModel, window: &Window, cx: &mut Context<AppMod
             .h_full()
             .min_h(px(0.0))
             .bg(model.sidebar_background())
+            .map(|sidebar| super::titlebar::top_corners(sidebar, window, true, false))
             .child(div().h(m.title_bar_height()).flex_none())
             .children(model.webviews.sidebar.as_ref().map(|sidebar| {
                 div()
@@ -165,6 +166,7 @@ pub(crate) fn sidebar(model: &AppModel, window: &Window, cx: &mut Context<AppMod
         .h_full()
         .min_h(px(0.0))
         .bg(model.sidebar_background())
+        .map(|sidebar| super::titlebar::top_corners(sidebar, window, true, false))
         .child(div().h(m.title_bar_height()).flex_none())
         .child(header)
         .child(contents)
@@ -272,10 +274,32 @@ impl AppModel {
     }
 
     fn clamp_expanded_sidebar_width(&self, width: Pixels) -> Pixels {
-        width.clamp(
+        let width = width.clamp(
             self.metrics.sidebar_expanded_min_width(),
             self.metrics.sidebar_expanded_max_width(),
-        )
+        );
+        #[cfg(target_os = "linux")]
+        let width = width.min(self.sidebar_available_width);
+        width
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn fit_sidebar_to_window(
+        &mut self,
+        window: &Window,
+        actions_width: f32,
+        cx: &mut Context<Self>,
+    ) {
+        let available = (super::titlebar::content_size(window).width
+            - px(actions_width)
+            - self.metrics.control_medium()
+            - self.metrics.spacing2()
+            - px(56.0))
+        .max(self.metrics.sidebar_expanded_min_width());
+        if self.sidebar_available_width != available {
+            self.sidebar_available_width = available;
+            self.sidebar_view.update(cx, |_, cx| cx.notify());
+        }
     }
 
     pub(crate) fn sidebar_filter_label(&self) -> SharedString {

@@ -891,11 +891,18 @@ impl Render for AppModel {
         #[cfg(all(target_os = "macos", not(test)))]
         self.sync_background_effects(window, cx);
         self.sync_toast(cx);
+        let (actions, actions_width) = titlebar::actions(self, window, cx);
+        #[cfg(target_os = "linux")]
+        self.fit_sidebar_to_window(window, actions_width, cx);
         let theme = &self.theme;
         let tab_focused = self.appearance.layout == muxy_app_core::settings::AppLayout::TabFocused
             && !self.extension_sidebar_active();
-        let grouped = self.state.current_project().groups().is_some();
         let sidebar_width = self.sidebar_width();
+        let header = if tab_focused || self.state.current_project().groups().is_some() {
+            super::tab_sidebar::titlebar(self, sidebar_width, window, actions, cx)
+        } else {
+            tab_strip::tab_strip(self, sidebar_width, window, (actions, actions_width), cx)
+        };
         let content = super::splits::render(self, window, cx).unwrap_or_else(|| empty(self, cx));
         let content = self.webview_panel_content(content, window, cx);
         let content = self.composer_content(content, window, cx);
@@ -933,11 +940,10 @@ impl Render for AppModel {
                             .flex_col()
                             .flex_none()
                             .bg(theme.bg)
-                            .child(if tab_focused || grouped {
-                                super::tab_sidebar::titlebar(self, sidebar_width, window, cx)
-                            } else {
-                                tab_strip::tab_strip(self, sidebar_width, window, cx)
+                            .map(|header| {
+                                titlebar::top_corners(header, window, sidebar_width <= 0.0, true)
                             })
+                            .child(header)
                             .child(div().h(px(1.0)).flex_none().bg(theme.border)),
                     )
                     .child(
@@ -965,8 +971,15 @@ impl Render for AppModel {
             .child(self.floating_composer(window, cx))
             .child(self.voice_panel())
             .children(super::banners::render(self, window, cx))
-            .child(overlays::layer(self, window, cx))
+            .child(titlebar::overlay(overlays::layer(self, window, cx), window))
             .child(self.apply_webview_regions(cx));
+        #[cfg(target_os = "linux")]
+        let workspace = titlebar::frame::render(
+            workspace,
+            theme,
+            (sidebar_width > 0.0).then_some((px(sidebar_width), self.sidebar_background())),
+            window,
+        );
         crate::profiler::workspace(workspace)
     }
 }

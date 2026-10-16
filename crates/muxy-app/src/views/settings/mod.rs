@@ -269,7 +269,10 @@ impl SettingsView {
             backup_import: None,
             backup_status: String::new(),
             extensions: None,
-            navigation_view: super::cached::CachedView::new(|view, _, cx| view.navigation(cx), cx),
+            navigation_view: super::cached::CachedView::new(
+                |view, window, cx| view.navigation(window, cx),
+                cx,
+            ),
             content_view: super::cached::CachedView::new(|view, _, cx| view.content(cx), cx),
             quick_recording: None,
             terminal_slider: None,
@@ -851,6 +854,7 @@ impl Render for SettingsView {
             .flex()
             .overflow_hidden()
             .bg(self.theme.bg)
+            .map(|view| super::titlebar::top_corners(view, window, true, true))
             .text_color(self.theme.fg)
             .text_size(self.metrics.font_body())
             .child(

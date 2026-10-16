@@ -185,6 +185,8 @@ fn run() -> ExitCode {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(640.0), px(400.0))),
             window_background: WindowBackgroundAppearance::Transparent,
+            #[cfg(target_os = "linux")]
+            window_decorations: Some(gpui::WindowDecorations::Client),
             // Empty titlebar space explicitly starts native movement, not tab presses.
             is_movable: !cfg!(target_os = "macos"),
             titlebar: Some(TitlebarOptions {
@@ -192,11 +194,11 @@ fn run() -> ExitCode {
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(9.0), px(9.0))),
             }),
-            ..WindowOptions::default()
+            ..window_options()
         };
         if let Err(error) = cx.open_window(options, |window, cx| {
             #[cfg(target_os = "linux")]
-            views::titlebar::linux::adopt_system_frame(window, app_name());
+            window.set_window_title(app_name());
             let model = cx.new(|cx| AppModel::new(boot, window, cx));
             model.update(cx, |_, cx| AppModel::open_folders_from(opened_folders, cx));
             model.update(cx, |model, cx| model.start_app_socket(window, cx));
@@ -243,6 +245,18 @@ fn restored_bounds(boot: &boot::Boot, cx: &App) -> Bounds<gpui::Pixels> {
 
 fn app_name() -> &'static str {
     muxy_core::release::Channel::current().app_name()
+}
+
+fn window_options() -> WindowOptions {
+    WindowOptions {
+        #[cfg(target_os = "linux")]
+        app_id: Some(
+            muxy_core::release::Channel::current()
+                .bundle_identifier()
+                .into(),
+        ),
+        ..WindowOptions::default()
+    }
 }
 
 #[allow(clippy::too_many_lines, reason = "One native menu registration list")]

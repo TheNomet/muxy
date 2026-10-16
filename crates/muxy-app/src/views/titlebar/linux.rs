@@ -1,60 +1,58 @@
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyElement, App, AppContext, ClickEvent, Decorations, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled, Window,
-    WindowDecorations, div,
+    AnyElement, App, AppContext, ClickEvent, Decorations, Div, InteractiveElement, IntoElement,
+    MouseButton, ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
+    div, px, svg,
 };
-use muxy_ui::components::{IconGlyph, Tooltip};
-use muxy_ui::icon::Icon;
-use muxy_ui::theme::{Metrics, Theme};
+use muxy_ui::components::Tooltip;
+use muxy_ui::theme::Theme;
 use muxy_ui::tr;
 
-/// Leaves the window's frame to the system, which shows `title` in it. Where
-/// the system draws none, the window keeps its own buttons so it can still be
-/// minimized and closed.
-pub(crate) fn adopt_system_frame(window: &mut Window, title: &str) {
-    window.set_window_title(title);
-    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
-    if gpui::guess_compositor() == "Wayland" && leaves_windows_unframed(&desktop) {
-        window.request_decorations(WindowDecorations::Client);
+const BUTTON_SIZE: f32 = 24.0;
+const BUTTON_GAP: f32 = 4.0;
+const GROUP_PADDING: f32 = 8.0;
+const GROUP_MARGIN: f32 = 4.0;
+
+pub(in crate::views) fn controls_width(window: &Window) -> f32 {
+    if !matches!(window.window_decorations(), Decorations::Client { .. }) {
+        return 0.0;
     }
+    let capabilities = window.window_controls();
+    let count = 1 + u8::from(capabilities.minimize) + u8::from(capabilities.maximize);
+    BUTTON_SIZE * f32::from(count)
+        + BUTTON_GAP * f32::from(count - 1)
+        + GROUP_PADDING * 2.0
+        + GROUP_MARGIN
 }
 
-/// GNOME's Wayland compositor draws no window frame and has no protocol to
-/// ask it for one.
-fn leaves_windows_unframed(desktop: &str) -> bool {
-    desktop
-        .split(':')
-        .any(|name| name.eq_ignore_ascii_case("GNOME"))
-}
-
-/// The buttons of a window the system left unframed.
 pub(in crate::views) fn controls(
     window: &Window,
     theme: &Theme,
-    metrics: Metrics,
     close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> Option<AnyElement> {
+) -> Option<Stateful<Div>> {
     if !matches!(window.window_decorations(), Decorations::Client { .. }) {
         return None;
     }
     let capabilities = window.window_controls();
     Some(
         div()
+            .id("window-controls")
+            .debug_selector(|| "window-controls".into())
             .flex()
+            .flex_none()
             .items_center()
-            .gap(metrics.spacing1())
+            .h_full()
+            .gap(px(BUTTON_GAP))
+            .ml(px(GROUP_MARGIN))
+            .px(px(GROUP_PADDING))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .when(capabilities.minimize, |controls| {
                 controls.child(button(
                     "window-minimize",
                     tr!("Minimize"),
-                    div()
-                        .w(metrics.scaled(8.0))
-                        .h(metrics.scaled(1.0))
-                        .bg(theme.fg_muted)
-                        .into_any_element(),
+                    "icons/window-minimize.svg",
                     theme,
-                    metrics,
                     |_, window, _| window.minimize_window(),
                 ))
             })
@@ -66,44 +64,44 @@ pub(in crate::views) fn controls(
                     } else {
                         tr!("Maximize")
                     },
-                    IconGlyph::new(Icon::Maximize, metrics.icon_sm(), theme.fg_muted)
-                        .into_any_element(),
+                    if window.is_maximized() {
+                        "icons/window-restore.svg"
+                    } else {
+                        "icons/window-maximize.svg"
+                    },
                     theme,
-                    metrics,
                     |_, window, _| window.zoom_window(),
                 ))
             })
             .child(button(
                 "window-close",
                 tr!("Close Window"),
-                IconGlyph::new(Icon::X, metrics.icon_sm(), theme.fg_muted).into_any_element(),
+                "icons/window-close.svg",
                 theme,
-                metrics,
                 close,
-            ))
-            .into_any_element(),
+            )),
     )
 }
 
 fn button(
     id: &'static str,
     label: SharedString,
-    glyph: AnyElement,
+    icon: &'static str,
     theme: &Theme,
-    metrics: Metrics,
     action: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let (background, foreground, border, theme_background) =
         (theme.raised(), theme.fg, theme.border, theme.bg);
     div()
         .id(id)
+        .group(id)
         .debug_selector(move || id.into())
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
-        .size(metrics.scaled(22.0))
-        .rounded(metrics.radius_sm())
+        .size(px(BUTTON_SIZE))
+        .rounded_full()
         .hover(|style| style.bg(theme.hover))
         .cursor_pointer()
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -124,21 +122,13 @@ fn button(
             })
             .into()
         })
-        .child(glyph)
+        .child(
+            svg()
+                .path(icon)
+                .size(px(16.0))
+                .flex_none()
+                .text_color(theme.fg_muted)
+                .group_hover(id, |style| style.text_color(foreground)),
+        )
         .into_any_element()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::leaves_windows_unframed;
-
-    #[test]
-    fn only_gnome_sessions_keep_their_own_window_buttons() {
-        for desktop in ["GNOME", "ubuntu:GNOME", "GNOME-Classic:gnome"] {
-            assert!(leaves_windows_unframed(desktop), "{desktop}");
-        }
-        for desktop in ["", "KDE", "sway", "X-Cinnamon"] {
-            assert!(!leaves_windows_unframed(desktop), "{desktop}");
-        }
-    }
 }

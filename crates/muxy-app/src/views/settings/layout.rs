@@ -157,7 +157,7 @@ impl SettingsView {
         })
     }
 
-    pub(super) fn navigation(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn navigation(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         div()
             .debug_selector(|| "settings-navigation".into())
             .flex_none()
@@ -171,10 +171,15 @@ impl SettingsView {
             .flex()
             .flex_col()
             .bg(self.theme.raised())
+            .map(|nav| titlebar::top_corners(nav, window, true, self.compact))
             .border_color(self.theme.border)
             .child(
                 self.titlebar("settings-sidebar-titlebar")
-                    .h(px(40.0))
+                    .h(px(if cfg!(target_os = "linux") && !self.compact {
+                        12.0
+                    } else {
+                        40.0
+                    }))
                     .flex_none(),
             )
             .child(
@@ -228,6 +233,7 @@ impl SettingsView {
     fn header(&self, cx: &mut Context<Self>) -> AnyElement {
         self.titlebar("settings-content-titlebar")
             .h(px(76.0))
+            .when(cfg!(target_os = "linux"), |header| header.pt(px(28.0)))
             .flex_none()
             .flex()
             .items_center()
@@ -338,6 +344,7 @@ impl SettingsView {
                 .min_h_0()
                 .h_full()
                 .px(px(if self.compact { 20.0 } else { 32.0 }))
+                .when(cfg!(target_os = "linux"), |content| content.pt(px(32.0)))
                 .child(extensions.clone())
                 .into_any_element();
         }
@@ -405,7 +412,7 @@ impl SettingsView {
             .flex()
             .when(self.compact, Styled::flex_col)
             .child(if self.compact {
-                self.navigation(cx)
+                self.navigation(window, cx)
             } else {
                 gpui::AnyView::from(self.navigation_view.clone())
                     .cached(div().w(px(248.0)).h_full().flex_none().style().clone())

@@ -105,17 +105,21 @@ impl AppModel {
                 cx,
             ))),
             window_min_size: Some(size(px(740.0), px(480.0))),
+            #[cfg(target_os = "linux")]
+            window_decorations: Some(gpui::WindowDecorations::Client),
+            #[cfg(target_os = "linux")]
+            window_background: gpui::WindowBackgroundAppearance::Transparent,
             is_movable: !cfg!(target_os = "macos"),
             titlebar: Some(TitlebarOptions {
                 title: Some(tr!("Muxy Settings")),
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(14.0), px(16.0))),
             }),
-            ..WindowOptions::default()
+            ..crate::window_options()
         };
         match cx.open_window(options, move |window, cx| {
             #[cfg(target_os = "linux")]
-            crate::views::titlebar::linux::adopt_system_frame(window, &tr!("Muxy Settings"));
+            window.set_window_title(&tr!("Muxy Settings"));
             let model = weak.clone();
             window.on_window_should_close(cx, move |_, cx| {
                 let _ = model.update(cx, |model, cx| {

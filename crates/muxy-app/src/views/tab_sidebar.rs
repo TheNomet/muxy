@@ -630,11 +630,11 @@ pub(super) fn titlebar(
     model: &AppModel,
     sidebar_width: f32,
     window: &Window,
+    actions: gpui::Div,
     cx: &mut Context<AppModel>,
 ) -> AnyElement {
     let theme = &model.theme;
     let project = model.state.current_project();
-    let (actions, _) = titlebar::actions(model, cx);
     titlebar::background("project-titlebar")
         .flex()
         .items_center()

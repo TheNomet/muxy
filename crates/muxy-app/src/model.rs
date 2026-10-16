@@ -159,6 +159,8 @@ pub(crate) struct AppModel {
     pub(crate) focus_return: Option<gpui::WeakFocusHandle>,
     pub(crate) split_resize: crate::views::splits::SplitResizeState,
     pub(crate) sidebar_resize: Option<crate::views::sidebar::SidebarResize>,
+    #[cfg(target_os = "linux")]
+    pub(crate) sidebar_available_width: gpui::Pixels,
     pub(crate) tab_drag: crate::views::tab_strip::TabDragState,
     pub(crate) layout_drag: crate::views::splits::drag::LayoutDragState,
     pub(crate) project_logo_task: Option<Task<()>>,
@@ -538,6 +540,8 @@ impl AppModel {
             focus_return: None,
             split_resize: crate::views::splits::SplitResizeState::default(),
             sidebar_resize: None,
+            #[cfg(target_os = "linux")]
+            sidebar_available_width: gpui::px(f32::MAX),
             tab_drag: crate::views::tab_strip::TabDragState::default(),
             layout_drag: crate::views::splits::drag::LayoutDragState::default(),
             #[cfg(target_os = "macos")]

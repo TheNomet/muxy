@@ -21,6 +21,7 @@ pub(crate) fn tab_strip(
     model: &AppModel,
     sidebar_width: f32,
     window: &Window,
+    actions: (gpui::Div, f32),
     cx: &mut Context<AppModel>,
 ) -> AnyElement {
     let strip = titlebar::background("tab-strip")
@@ -29,13 +30,13 @@ pub(crate) fn tab_strip(
         .items_center()
         .h(px(32.0))
         .flex_none();
-    let (actions, actions_width) = titlebar::actions(model, cx);
+    let (actions, actions_width) = actions;
     if model.state.current_project().status() == muxy_app_core::ProjectStatus::Missing {
         return strip.justify_end().child(actions).into_any_element();
     }
     let leading = (titlebar::navigation_width(model, window) - sidebar_width).max(0.0);
-    let new_tab_width = f32::from(model.metrics.control_medium() + model.metrics.spacing2());
-    let available = (f32::from(window.viewport_size().width)
+    let new_tab_width = f32::from(model.metrics.control_medium() + model.metrics.spacing2() * 2.0);
+    let available = (f32::from(titlebar::content_size(window).width)
         - sidebar_width
         - leading
         - actions_width
@@ -89,7 +90,7 @@ pub(crate) fn group_strip(
         .active_tab()
         .is_some_and(|tab| group.tabs().contains(&tab));
     let count = u16::try_from(tabs.len()).unwrap_or(u16::MAX).max(1);
-    let control_width = f32::from(model.metrics.control_medium() + model.metrics.spacing2());
+    let control_width = f32::from(model.metrics.control_medium() + model.metrics.spacing2() * 2.0);
     let cell_width = ((width - control_width) / f32::from(count)).clamp(44.0, 200.0);
     let cells = tab_cells(&tabs, cell_width, focused, model, cx).child(new_tab_button(
         group.tabs().last().copied(),
@@ -157,6 +158,7 @@ pub(super) fn new_tab_button(
         |anchor| SharedString::from(format!("new-tab-{anchor}")),
     );
     titlebar::icon_button(id, Icon::Plus, tr!("New Tab (⌘T)"), model)
+        .ml(model.metrics.spacing2())
         .debug_selector(move || {
             if anchor.is_some() {
                 "group-new-tab-button"

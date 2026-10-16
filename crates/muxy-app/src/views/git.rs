@@ -387,7 +387,6 @@ impl AppModel {
         }));
     }
 
-    /// Git answered for `project`, and its folder is not a repository.
     pub(crate) fn not_a_repository(&self, project: ProjectId) -> bool {
         self.git
             .projects
@@ -501,8 +500,6 @@ impl AppModel {
         cx.notify();
     }
 
-    /// Focuses the open form's first field. Opening it from a key binding
-    /// can't focus through `self.window`, which that binding is updating.
     pub(crate) fn focus_git_form(&self, window: &mut Window, cx: &gpui::App) {
         if let Some(Overlay::GitForm(form)) = &self.overlay {
             let input = if form.worktree {

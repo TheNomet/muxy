@@ -86,9 +86,6 @@ impl AppModel {
         cx.notify();
     }
 
-    /// The project a new worktree branches from: the current project, or the
-    /// parent of the current worktree. `None` where the project menu offers no
-    /// New Worktree…: Home, a missing folder, hidden worktrees, or no repository.
     pub(crate) fn new_worktree_target(&self) -> Option<ProjectId> {
         let current = self.state.current_project();
         let project = self

@@ -777,7 +777,7 @@ impl Render for SettingsWindow {
                 window.start_window_move();
             }))
             .child(self.view.clone())
-            .child(self.overlay(cx));
+            .child(crate::views::titlebar::overlay(self.overlay(cx), window));
         #[cfg(target_os = "linux")]
         let root = {
             let view = self.view.read(cx);
@@ -785,19 +785,28 @@ impl Render for SettingsWindow {
                 crate::views::titlebar::linux::controls(
                     window,
                     &view.theme,
-                    view.metrics,
                     cx.listener(|root, _, window, cx| root.close(window, cx)),
                 )
                 .map(|controls| {
                     div()
                         .absolute()
-                        .left(gpui::px(9.0))
+                        .right_0()
                         .top_0()
-                        .h(gpui::px(40.0))
+                        .h(gpui::px(32.0))
                         .flex()
                         .items_center()
                         .child(controls)
                 }),
+            )
+        };
+        #[cfg(target_os = "linux")]
+        let root = {
+            let view = self.view.read(cx);
+            crate::views::titlebar::frame::render(
+                root,
+                &view.theme,
+                (!view.compact).then_some((gpui::px(248.0), view.theme.raised())),
+                window,
             )
         };
         root

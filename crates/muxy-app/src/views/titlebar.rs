@@ -11,9 +11,40 @@ use muxy_ui::tr;
 use crate::model::AppModel;
 
 #[cfg(target_os = "linux")]
+pub(crate) mod frame;
+#[cfg(target_os = "linux")]
 pub(crate) mod linux;
 
-pub(super) fn actions(model: &AppModel, cx: &mut Context<AppModel>) -> (Div, f32) {
+pub(crate) fn content_size(window: &Window) -> gpui::Size<gpui::Pixels> {
+    #[cfg(target_os = "linux")]
+    return frame::bounds(window).size;
+    #[cfg(not(target_os = "linux"))]
+    window.viewport_size()
+}
+
+pub(crate) fn overlay(element: impl IntoElement, window: &Window) -> AnyElement {
+    #[cfg(target_os = "linux")]
+    return frame::overlay(element, window);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = window;
+        element.into_any_element()
+    }
+}
+
+pub(super) fn top_corners<T: Styled>(element: T, window: &Window, left: bool, right: bool) -> T {
+    #[cfg(target_os = "linux")]
+    return frame::top_corners(element, window, left, right);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (window, left, right);
+        element
+    }
+}
+
+pub(super) fn actions(model: &AppModel, window: &Window, cx: &mut Context<AppModel>) -> (Div, f32) {
+    #[cfg(not(target_os = "linux"))]
+    let _ = window;
     let project = model.state.current_project();
     let available = project.status() == muxy_app_core::ProjectStatus::Available;
     let existing_count = if available {
@@ -41,6 +72,7 @@ pub(super) fn actions(model: &AppModel, cx: &mut Context<AppModel>) -> (Div, f32
         .flex()
         .flex_none()
         .items_center()
+        .when(cfg!(target_os = "linux"), Styled::h_full)
         .when(existing_count > 0, |bar| {
             bar.child(super::tab_strip::existing_terminals_button(
                 existing_count,
@@ -63,6 +95,17 @@ pub(super) fn actions(model: &AppModel, cx: &mut Context<AppModel>) -> (Div, f32
         })
         .child(model.extension_toolbar(cx))
         .child(super::tab_strip::settings_button(model, cx));
+    #[cfg(target_os = "linux")]
+    if let Some(controls) = linux::controls(
+        window,
+        &model.theme,
+        cx.listener(|model, _, _, cx| model.quit(cx)),
+    ) {
+        return (
+            bar.child(controls.border_l_1().border_color(model.theme.border)),
+            width + linux::controls_width(window) + 1.0,
+        );
+    }
     (bar, width)
 }
 
@@ -173,26 +216,7 @@ pub(crate) fn navigation(
 ) -> AnyElement {
     let m = model.metrics;
     let theme = &model.theme;
-    #[cfg(not(target_os = "linux"))]
-    let controls = None::<AnyElement>;
-    #[cfg(target_os = "linux")]
-    let controls = linux::controls(
-        window,
-        theme,
-        m,
-        cx.listener(|model, _, _, cx| model.quit(cx)),
-    )
-    .map(|controls| {
-        div()
-            .absolute()
-            .left(m.spacing2())
-            .top_0()
-            .h_full()
-            .flex()
-            .items_center()
-            .child(controls)
-            .into_any_element()
-    });
+    let toggle = sidebar_toggle(model, cx);
     background("titlebar-navigation")
         .occlude()
         .absolute()
@@ -204,7 +228,6 @@ pub(crate) fn navigation(
         .items_center()
         .justify_end()
         .pr(m.spacing4())
-        .gap(m.spacing1())
         .bg(if model.appearance.sidebar_expanded {
             gpui::transparent_black()
         } else {
@@ -212,51 +235,77 @@ pub(crate) fn navigation(
         })
         .border_r_1()
         .border_color(theme.border)
-        .children(controls)
-        .child(arrow(model, false, cx))
-        .child(arrow(model, true, cx))
-        .child(
-            div()
-                .debug_selector(|| "sidebar-toggle".into())
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(
-                    muxy_ui::components::IconButton::new(
-                        "toggle-sidebar",
-                        Icon::PanelLeft,
-                        m.font_body(),
-                        m.scaled(22.0),
-                        theme.fg_muted,
-                        theme.fg,
+        .map(|bar| top_corners(bar, window, true, false))
+        .map(|bar| {
+            if cfg!(target_os = "linux") {
+                bar.child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .w(m.sidebar_collapsed_width())
+                        .child(toggle),
+                )
+                .when(model.appearance.sidebar_expanded, |bar| {
+                    bar.child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .truncate()
+                            .text_size(m.font_body())
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.fg_muted)
+                            .child("Muxy"),
                     )
-                    .tooltip(
-                        tr!("Toggle Sidebar"),
-                        theme.raised(),
-                        theme.fg,
-                        theme.border,
-                        theme.bg,
-                    )
-                    .on_click(cx.listener(|model, _, window, cx| {
-                        cx.stop_propagation();
-                        model.toggle_sidebar(window, cx);
-                    })),
-                ),
-        )
+                })
+                .child(arrow(model, false, cx))
+                .child(arrow(model, true, cx))
+            } else {
+                bar.gap(m.spacing1())
+                    .child(arrow(model, false, cx))
+                    .child(arrow(model, true, cx))
+                    .child(toggle)
+            }
+        })
         .into_any_element()
 }
 
-/// Whether the window's buttons sit in this titlebar. A system that frames
-/// the window draws them itself, above the content.
-fn holds_window_buttons(window: &Window) -> bool {
-    cfg!(target_os = "macos")
-        || matches!(
-            window.window_decorations(),
-            gpui::Decorations::Client { .. }
+fn sidebar_toggle(model: &AppModel, cx: &mut Context<AppModel>) -> Div {
+    let m = model.metrics;
+    let theme = &model.theme;
+    div()
+        .debug_selector(|| "sidebar-toggle".into())
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .child(
+            muxy_ui::components::IconButton::new(
+                "toggle-sidebar",
+                Icon::PanelLeft,
+                m.font_body(),
+                m.scaled(22.0),
+                theme.fg_muted,
+                theme.fg,
+            )
+            .tooltip(
+                tr!("Toggle Sidebar"),
+                theme.raised(),
+                theme.fg,
+                theme.border,
+                theme.bg,
+            )
+            .on_click(cx.listener(|model, _, window, cx| {
+                cx.stop_propagation();
+                model.toggle_sidebar(window, cx);
+            })),
         )
 }
 
-pub(super) fn navigation_width(model: &AppModel, window: &Window) -> f32 {
+pub(super) fn navigation_width(model: &AppModel, _: &Window) -> f32 {
+    if cfg!(target_os = "linux") {
+        return f32::from(model.metrics.sidebar_collapsed_width() + model.metrics.scaled(52.0));
+    }
     let arrows = model.metrics.navigation_arrows_width();
-    f32::from(if holds_window_buttons(window) {
+    f32::from(if cfg!(target_os = "macos") {
         model.metrics.traffic_light_width() + arrows
     } else {
         arrows
