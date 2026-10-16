@@ -290,17 +290,43 @@ def restart(root, version, previous, parent):
     subprocess.Popen([str(root / "current/muxy-app")], start_new_session=True)
 
 
-def desktop_entry(root, version):
+def desktop_entry(root, version, appimage=False):
     beta = channel(version) == "beta"
     identifier = "com.muxy-beta.app" if beta else "com.muxy.app"
     path = data_home() / "applications" / f"{identifier}.desktop"
-    executable = str(root / "current/muxy-app")
+    executable = str(root / ("usr/bin/muxy-app" if appimage else "current/muxy-app"))
     executable = executable.replace("\\", "\\\\\\\\").replace('"', '\\\\"').replace("`", "\\\\`").replace("$", "\\\\$").replace("%", "%%")
-    icon = str(root / "current/icon.png").replace("\\", "\\\\")
+    icon = str(root / (f"{identifier}.png" if appimage else "current/icon.png")).replace("\\", "\\\\")
     contents = (f"[Desktop Entry]\nType=Application\nName={'Muxy Beta' if beta else 'Muxy'}\n"
                 f'Exec="{executable}" %F\nIcon={icon}\nTerminal=false\nCategories=Development;TerminalEmulator;\n'
                 f"StartupWMClass={identifier}\n")
+    if appimage:
+        contents += f"X-Muxy-AppImage={root.name}\n"
     return path, contents
+
+
+def integrate_appimage(root, version):
+    if root.parent.resolve() != data_home() / "muxy-appimage" or not re.fullmatch(r"[0-9a-f]{64}", root.name):
+        raise ValueError("Invalid unpacked AppImage path")
+    owned_directory(root)
+    path, contents = desktop_entry(root, version, appimage=True)
+    if path.exists() or path.is_symlink():
+        previous = path.read_text() if path.is_file() and not path.is_symlink() else ""
+        if previous == contents:
+            return
+        owner = re.search(r"^X-Muxy-AppImage=([0-9a-f]{64})$", previous, re.MULTILINE)
+        if not owner or previous != desktop_entry(root.parent / owner[1], version, appimage=True)[1]:
+            print(f"Kept existing desktop entry {path}", file=sys.stderr)
+            return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as output:
+        temporary = Path(output.name)
+        try:
+            output.write(contents)
+            output.flush()
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def integrate(root, version):
@@ -362,6 +388,23 @@ def fetch(url, output, limit):
     return total
 
 
+def latest(release_channel):
+    import io
+    url = (f"{RELEASES}/beta-2.x/update.json" if release_channel == "beta"
+           else "https://github.com/muxy-app/muxy/releases/latest/download/update.json")
+    metadata = io.BytesIO()
+    fetch(url, metadata, 65536)
+    feed = json.loads(metadata.getvalue())
+    version = feed["version"]
+    if feed.get("schema") != 1 or channel(version) != release_channel:
+        raise ValueError("Unexpected release channel metadata")
+    key = "linux-aarch64" if architecture() == "arm64" else "linux-x86_64"
+    if key not in feed.get("platforms", {}):
+        raise ValueError(f"The latest {release_channel} release has no Linux desktop for this architecture. "
+                         "Use --channel beta to opt into beta releases, or --version to select a desktop release.")
+    return version
+
+
 def download(version, directory):
     import io
     metadata = io.BytesIO()
@@ -382,8 +425,9 @@ def download(version, directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("install", "stage", "verify", "prune", "discard", "activate", "restart", "uninstall"))
-    parser.add_argument("--version")
+    parser.add_argument("command", choices=("install", "stage", "verify", "prune", "discard", "activate", "restart", "uninstall", "integrate-appimage"))
+    parser.add_argument("--version", help="Exact release; otherwise install the latest release in the selected channel")
+    parser.add_argument("--channel", choices=("stable", "beta"), help="Channel for install (default: stable)")
     parser.add_argument("--root", type=Path)
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--sha256")
@@ -392,7 +436,17 @@ def main():
     args = parser.parse_args()
     if platform.system() != "Linux" or os.getuid() == 0:
         raise ValueError("Run as your normal user on Linux, without sudo")
-    if args.command in {"install", "stage", "verify", "discard", "activate", "restart"}:
+    if args.channel and args.command != "install":
+        raise ValueError("--channel is only used for install")
+    if args.command == "install":
+        if args.archive and not args.version:
+            raise ValueError("An offline archive requires --version and --sha256")
+        if not args.version:
+            args.version = latest(args.channel or "stable")
+        if args.channel and channel(args.version) != args.channel:
+            raise ValueError("The version does not belong to the selected channel")
+        print(f"Installing Muxy {args.version} for Linux {architecture()}…", flush=True)
+    if args.command in {"install", "stage", "verify", "discard", "activate", "restart", "integrate-appimage"}:
         channel(args.version or "")
     root = args.root or (default_root(args.version) if args.command == "install" else Path(__file__).resolve().parent.parent.parent)
     if not root.is_absolute() or any(character in str(root) for character in "\n\r\0"):
@@ -401,6 +455,9 @@ def main():
         channel(args.current or "")
         if not args.pid or args.pid <= 1:
             raise ValueError("Missing updater process")
+    if args.command == "integrate-appimage":
+        integrate_appimage(root, args.version)
+        return
     if args.command == "restart":
         restart(root, args.version, args.current, args.pid)
         return

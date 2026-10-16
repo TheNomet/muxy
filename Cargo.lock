@@ -5847,7 +5847,7 @@ checksum = "5da3b0203fd7ee5720aa0b5e790b591aa5d3f41c3ed2c34a3a393382198af2f7"
 [[package]]
 name = "polybrowser"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
+source = "git+https://github.com/saeedvaziry/polybrowser?branch=main#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "polybrowser-core",
  "polybrowser-webkitgtk",
@@ -5858,7 +5858,7 @@ dependencies = [
 [[package]]
 name = "polybrowser-core"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
+source = "git+https://github.com/saeedvaziry/polybrowser?branch=main#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "aes",
  "cbc",
@@ -5881,7 +5881,7 @@ dependencies = [
 [[package]]
 name = "polybrowser-webkitgtk"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
+source = "git+https://github.com/saeedvaziry/polybrowser?branch=main#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "libloading",
  "polybrowser-core",
@@ -5891,7 +5891,7 @@ dependencies = [
 [[package]]
 name = "polybrowser-wry"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
+source = "git+https://github.com/saeedvaziry/polybrowser?branch=main#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "block2",
  "gtk",
