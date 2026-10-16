@@ -7,11 +7,12 @@ use gpui::{
 use muxy_ui::components::{IconButton, IconGlyph};
 use muxy_ui::icon::Icon;
 use muxy_ui::picker::{Confirm, Dismiss, SelectNext, SelectPrevious};
+use muxy_ui::theme::contrasting_foreground;
 use muxy_ui::tr;
 
 use crate::model::AppModel;
 use crate::model::agents_panel::{
-    AgentStatus, Entry, EntryKey, MIN_HEIGHT, MIN_WIDTH, Placement, RunningAgent,
+    AgentStatus, Drag, Entry, EntryKey, MIN_HEIGHT, MIN_WIDTH, Placement, RunningAgent,
 };
 
 const DOCKED_MAX_HEIGHT: f32 = 260.0;
@@ -445,7 +446,6 @@ pub(crate) fn docked(
         return None;
     }
     let m = model.metrics;
-    let theme = &model.theme;
     let height = model
         .appearance
         .agents_panel_docked_height
@@ -453,48 +453,67 @@ pub(crate) fn docked(
         .map(|height| model.clamp_docked_height(height, window.viewport_size()));
     let measured = model.agents_panel.docked_height.clone();
     let start = measured.clone();
+    let active = matches!(model.agents_panel.drag, Some(Drag::Docked { .. }));
+    let background = model.sidebar_background();
+    let separator = Hsla::from(contrasting_foreground(background.into())).opacity(0.08);
+    let panel = div()
+        .relative()
+        .flex()
+        .flex_col()
+        .flex_none()
+        .mx(m.spacing3())
+        .mb(m.spacing3())
+        .map(|panel| match height {
+            Some(height) => panel.h(m.scaled(height)),
+            None => panel.max_h(m.scaled(DOCKED_MAX_HEIGHT)),
+        })
+        .child(
+            canvas(
+                move |bounds, _, _| measured.set(bounds.size.height),
+                |_, (), _, _| {},
+            )
+            .absolute()
+            .size_full(),
+        )
+        .child(body(Placement::Docked, model, window, cx).flex_1())
+        .child(
+            div()
+                .id("agents-panel-docked-resize")
+                .debug_selector(|| "agents-panel-docked-resize".into())
+                .group("agents-panel-docked-resize")
+                .absolute()
+                .top(-m.scaled(RESIZE_EDGE / 2.0))
+                .left(-m.spacing3())
+                .right(-m.spacing3())
+                .h(m.scaled(RESIZE_EDGE))
+                .cursor(gpui::CursorStyle::ResizeUpDown)
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |model, event: &gpui::MouseDownEvent, window, cx| {
+                        model.begin_agents_panel_docked_drag(event.position.y, start.get(), cx);
+                        window.prevent_default();
+                        cx.stop_propagation();
+                    }),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .top(m.scaled(RESIZE_EDGE / 2.0) - px(1.0))
+                        .w_full()
+                        .h(px(1.0))
+                        .group_hover("agents-panel-docked-resize", |line| {
+                            line.bg(model.theme.accent)
+                        }),
+                ),
+        );
     Some(
         div()
-            .relative()
-            .flex()
-            .flex_col()
             .flex_none()
-            .mx(m.spacing3())
-            .mb(m.spacing3())
-            .map(|panel| match height {
-                Some(height) => panel.h(m.scaled(height)),
-                None => panel.max_h(m.scaled(DOCKED_MAX_HEIGHT)),
-            })
-            .rounded(m.radius_xl())
-            .bg(theme.surface)
-            .child(
-                canvas(
-                    move |bounds, _, _| measured.set(bounds.size.height),
-                    |_, (), _, _| {},
-                )
-                .absolute()
-                .size_full(),
-            )
-            .child(body(Placement::Docked, model, window, cx).flex_1())
-            .child(
-                div()
-                    .id("agents-panel-docked-resize")
-                    .debug_selector(|| "agents-panel-docked-resize".into())
-                    .absolute()
-                    .top(-m.scaled(RESIZE_EDGE / 2.0))
-                    .left_0()
-                    .right_0()
-                    .h(m.scaled(RESIZE_EDGE))
-                    .cursor(gpui::CursorStyle::ResizeUpDown)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |model, event: &gpui::MouseDownEvent, window, cx| {
-                            model.begin_agents_panel_docked_drag(event.position.y, start.get(), cx);
-                            window.prevent_default();
-                            cx.stop_propagation();
-                        }),
-                    ),
-            )
+            .bg(background)
+            .border_t_1()
+            .border_color(separator)
+            .when(active, |panel| panel.border_color(model.theme.accent))
+            .child(panel)
             .into_any_element(),
     )
 }

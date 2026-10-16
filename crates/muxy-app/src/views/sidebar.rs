@@ -165,36 +165,27 @@ pub(crate) fn sidebar(model: &AppModel, window: &Window, cx: &mut Context<AppMod
         .w(px(model.sidebar_width()))
         .h_full()
         .min_h(px(0.0))
-        .bg(model.sidebar_background())
-        .map(|sidebar| super::titlebar::top_corners(sidebar, window, true, false))
-        .child(div().h(m.title_bar_height()).flex_none())
-        .child(header)
-        .child(card(contents, model))
-        .children(tips::footer(model, cx))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h(px(0.0))
+                .bg(model.sidebar_background())
+                .map(|sidebar| super::titlebar::top_corners(sidebar, window, true, false))
+                .child(div().h(m.title_bar_height()).flex_none())
+                .child(header)
+                .child(contents)
+                .children(tips::footer(model, cx))
+                .children(super::agents_panel::collapsed_button(model, cx)),
+        )
         .children(super::agents_panel::docked(model, window, cx))
-        .children(super::agents_panel::collapsed_button(model, cx))
-        .child(super::remote_servers::section(model, cx))
-        .into_any_element()
-}
-
-fn card(contents: AnyElement, model: &AppModel) -> AnyElement {
-    if !model.appearance.sidebar_expanded {
-        return contents;
-    }
-    let m = model.metrics;
-    div()
-        .debug_selector(|| "sidebar-card".into())
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_h(px(0.0))
-        .mx(m.spacing3())
-        .mt(m.spacing2())
-        .mb(m.spacing3())
-        .rounded(m.radius_xl())
-        .bg(model.theme.surface)
-        .overflow_hidden()
-        .child(contents)
+        .child(
+            div()
+                .flex_none()
+                .bg(model.sidebar_background())
+                .child(super::remote_servers::section(model, cx)),
+        )
         .into_any_element()
 }
 
@@ -548,6 +539,15 @@ fn layout_selector(model: &AppModel, cx: &mut Context<AppModel>) -> AnyElement {
                         Command::Layout(AppLayout::AgentsFocused),
                     )
                     .checked_if(model.appearance.layout == AppLayout::AgentsFocused),
+                    Item::action(
+                        if model.appearance.agents_panel_visible {
+                            tr!("Hide agents panel")
+                        } else {
+                            tr!("Show agents panel")
+                        },
+                        Command::AgentsPanel(!model.appearance.agents_panel_visible),
+                    )
+                    .separated(),
                 ],
                 event.position(),
                 window,
@@ -924,7 +924,7 @@ pub(super) fn add_project_button(model: &AppModel, cx: &mut Context<AppModel>) -
                 .justify_center()
                 .size(m.icon_xxl())
                 .rounded(m.radius_md())
-                .bg(if wide { theme.hover } else { theme.surface })
+                .bg(theme.surface)
                 .child(IconGlyph::new(
                     Icon::Plus,
                     m.font_emphasis(),

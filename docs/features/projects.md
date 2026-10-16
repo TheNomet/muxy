@@ -42,7 +42,15 @@ For Git projects, worktrees appear under their project and have their own
 tabs. Turn them on with **Worktrees → Show Worktrees** in the project menu.
 Worktrees created outside Muxy show up on their own.
 
-**New Worktree…** asks for:
+**Switch Worktree…** (`Cmd+Opt+W`) lists the current project and its
+worktrees: the current one first, then the most recently used, so `Down` and
+Return goes back to the previous one. Type to filter, then press Return to
+switch. Each worktree can be renamed or removed from its row, and **New
+Worktree…** sits at the bottom. Turn off **Settings → Appearance → Order the
+worktree switcher by recent use** to list them in sidebar order.
+
+**New Worktree…** (`Cmd+Opt+N`, from the current project or worktree) asks
+for:
 
 - A name, and a new branch (from a base branch) or an existing one.
 - A location: **Default** (`~/.muxy/worktrees/<project>/<name>`), a

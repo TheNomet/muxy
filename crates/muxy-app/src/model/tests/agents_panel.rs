@@ -2,7 +2,7 @@ use super::worktrees::{Sent, connected, pruning_fixture};
 use super::*;
 use crate::model::agents_panel::{AgentStatus, Entry, EntryKey, Placement};
 use gpui::Modifiers;
-use muxy_app_core::settings::AgentsPanelGrouping;
+use muxy_app_core::settings::{AgentsPanelGrouping, AppLayout};
 use muxy_core::shortcuts::ShortcutId;
 use muxy_protocol::{
     ActivityEvent, ActivityKind, ActivitySnapshot, AgentActivity, AgentProvider, AgentState,
@@ -192,6 +192,60 @@ fn the_shortcut_shows_and_focuses_then_hides_and_keys_open_only_live_panes(
             "an agent whose pane is gone opens nothing"
         );
     });
+}
+
+#[gpui::test]
+fn the_layout_menu_shows_and_hides_the_panel_without_changing_layout(cx: &mut TestAppContext) {
+    let (view, cx, _fixture) = agents(cx);
+    let click = |selector: &'static str, cx: &mut VisualTestContext| {
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
+        let bounds = cx.debug_bounds(selector).expect(selector);
+        cx.simulate_click(bounds.center(), Modifiers::none());
+        cx.run_until_parked();
+    };
+    for detached in [false, true] {
+        view.update_in(cx, |model, window, cx| {
+            model.appearance.layout = AppLayout::TabFocused;
+            model.appearance.sidebar_expanded = true;
+            model.appearance.agents_panel_visible = false;
+            model.appearance.agents_panel_detached = detached;
+            model.focus_active(window, cx);
+            cx.notify();
+        });
+        click("layout-menu", cx);
+        view.read_with(cx, |model, _| {
+            assert_eq!(
+                model.menu_outline()[0].last().map(String::as_str),
+                Some("Show agents panel")
+            );
+        });
+        click("menu-item-3", cx);
+        view.update_in(cx, |model, window, cx| {
+            assert!(model.overlay.is_none());
+            assert!(model.agents_panel_shown());
+            assert!(model.settings.appearance.agents_panel_visible);
+            assert!(model.agents_panel.focus.contains_focused(window, cx));
+            assert_eq!(model.appearance.layout, AppLayout::TabFocused);
+            model.focus_active(window, cx);
+        });
+
+        click("layout-menu", cx);
+        view.read_with(cx, |model, _| {
+            assert_eq!(
+                model.menu_outline()[0].last().map(String::as_str),
+                Some("Hide agents panel")
+            );
+        });
+        click("menu-item-3", cx);
+        view.update_in(cx, |model, window, cx| {
+            assert!(model.overlay.is_none());
+            assert!(!model.agents_panel_shown());
+            assert!(!model.settings.appearance.agents_panel_visible);
+            assert!(!model.agents_panel.focus.contains_focused(window, cx));
+            assert_eq!(model.appearance.layout, AppLayout::TabFocused);
+        });
+    }
 }
 
 #[gpui::test]
@@ -432,12 +486,6 @@ fn the_floating_panel_moves_by_its_header_and_resizes_by_its_corner(cx: &mut Tes
 fn the_docked_panel_resizes_by_its_top_edge_and_scrolls_by_its_thumb(cx: &mut TestAppContext) {
     let (view, cx, _fixture) = agents(cx);
     cx.simulate_resize(size(px(1200.0), px(800.0)));
-    view.update(cx, |model, cx| {
-        model.appearance.sidebar_expanded = true;
-        model.appearance.agents_panel_visible = true;
-        model.appearance.agents_panel_docked_height = Some(crate::model::agents_panel::MIN_HEIGHT);
-        cx.notify();
-    });
     let drag = |selector: &'static str, by: gpui::Pixels, cx: &mut VisualTestContext| {
         cx.update(|window, _| window.refresh());
         cx.run_until_parked();
@@ -452,22 +500,43 @@ fn the_docked_panel_resizes_by_its_top_edge_and_scrolls_by_its_thumb(cx: &mut Te
     let scrolled = |view: &Entity<AppModel>, cx: &mut VisualTestContext| {
         view.read_with(cx, |model, _| -model.agents_panel.scroll.offset().y)
     };
-    cx.update(|window, _| window.refresh());
-    cx.run_until_parked();
-    assert!(
-        view.read_with(cx, |model, _| model.agents_panel.scroll.max_offset().height) > px(0.0),
-        "the short panel overflows"
-    );
-    drag("agents-panel-scrollbar", px(40.0), cx);
-    assert!(scrolled(&view, cx) > px(0.0), "the thumb scrolls the list");
+    for layout in [
+        AppLayout::ProjectFocused,
+        AppLayout::TabFocused,
+        AppLayout::AgentsFocused,
+    ] {
+        view.update(cx, |model, cx| {
+            model.appearance.layout = layout;
+            model.appearance.sidebar_expanded = true;
+            model.appearance.agents_panel_visible = true;
+            model.appearance.agents_panel_docked_height =
+                Some(crate::model::agents_panel::MIN_HEIGHT);
+            model
+                .agents_panel
+                .scroll
+                .set_offset(gpui::point(px(0.0), px(0.0)));
+            cx.notify();
+        });
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
+        assert!(
+            view.read_with(cx, |model, _| model.agents_panel.scroll.max_offset().height) > px(0.0),
+            "the short panel overflows in {layout:?}"
+        );
+        drag("agents-panel-scrollbar", px(40.0), cx);
+        assert!(
+            scrolled(&view, cx) > px(0.0),
+            "the thumb scrolls the list in {layout:?}"
+        );
 
-    drag("agents-panel-docked-resize", px(-60.0), cx);
-    let height = view.read_with(cx, |model, _| {
-        model.settings.appearance.agents_panel_docked_height
-    });
-    let expected = crate::model::agents_panel::MIN_HEIGHT + 60.0;
-    assert!(
-        height.is_some_and(|height| (height - expected).abs() < 1.0),
-        "dragging the top edge up makes it taller and is saved: {height:?}"
-    );
+        drag("agents-panel-docked-resize", px(-60.0), cx);
+        let height = view.read_with(cx, |model, _| {
+            model.settings.appearance.agents_panel_docked_height
+        });
+        let expected = crate::model::agents_panel::MIN_HEIGHT + 60.0;
+        assert!(
+            height.is_some_and(|height| (height - expected).abs() < 1.0),
+            "dragging the top edge up makes it taller and is saved in {layout:?}: {height:?}"
+        );
+    }
 }

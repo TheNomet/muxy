@@ -42,6 +42,7 @@ const SUBMENU_GRACE: Duration = Duration::from_millis(250);
 pub(crate) enum Command {
     Tab(muxy_app_core::TabId, super::tab_menu::Action),
     Layout(muxy_app_core::settings::AppLayout),
+    AgentsPanel(bool),
     FocusProject(bool),
     SelectWorkspace(Option<muxy_app_core::WorkspaceId>),
     SelectRemoteServers,
@@ -552,6 +553,14 @@ impl AppModel {
                 }
             }
             Command::Layout(layout) => self.set_layout(layout, cx),
+            Command::AgentsPanel(true) => {
+                self.toggle_agents_panel(window, cx);
+                return;
+            }
+            Command::AgentsPanel(false) => {
+                self.hide_agents_panel(window, cx);
+                return;
+            }
             Command::FocusProject(focused) => self.set_project_focus(focused, cx),
             Command::SelectWorkspace(workspace) => self.select_workspace(workspace, cx),
             Command::SelectRemoteServers => self.select_remote_servers(cx),
@@ -581,6 +590,7 @@ impl AppModel {
             }
             Command::NewWorktree(id) => {
                 self.open_git_form(id, true, cx);
+                self.focus_git_form(window, cx);
                 return;
             }
             Command::NewProjectTab(id) => {

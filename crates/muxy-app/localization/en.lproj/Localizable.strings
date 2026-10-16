@@ -661,6 +661,7 @@
 "Hide Others" = "Hide Others";
 "Hide Tips" = "Hide Tips";
 "Hide Tips?" = "Hide Tips?";
+"Hide agents panel" = "Hide agents panel";
 "Hides the panel" = "Hides the panel";
 "Hiding apps is not available on this platform." = "Hiding apps is not available on this platform.";
 "History & Bookmarks" = "History & Bookmarks";
@@ -765,6 +766,7 @@
 "Line spacing" = "Line spacing";
 "Line spacing from 1.1 to 2.0." = "Line spacing from 1.1 to 2.0.";
 "List each agent and open its pane, or each project and worktree running agents and open it." = "List each agent and open its pane, or each project and worktree running agents and open it.";
+"List the current worktree first, then the most recently used. Off, the project comes first, then its worktrees." = "List the current worktree first, then the most recently used. Off, the project comes first, then its worktrees.";
 "Listening on port %lld" = "Listening on port %lld";
 "Listening..." = "Listening...";
 "Listening…" = "Listening…";
@@ -904,6 +906,7 @@
 "No matching folders" = "No matching folders";
 "No matching languages" = "No matching languages";
 "No matching terminals" = "No matching terminals";
+"No matching worktrees" = "No matching worktrees";
 "No microphone is available" = "No microphone is available";
 "No notification service is running on this desktop." = "No notification service is running on this desktop.";
 "No on-device speech language is installed. Add one in System Settings → Keyboard → Dictation." = "No on-device speech language is installed. Add one in System Settings → Keyboard → Dictation.";
@@ -972,6 +975,7 @@
 "Optional setup commands: add setup to .muxy/worktree.json in the project or $XDG_CONFIG_HOME/muxy/worktree.json (defaults to ~/.config/muxy/worktree.json)." = "Optional setup commands: add setup to .muxy/worktree.json in the project or $XDG_CONFIG_HOME/muxy/worktree.json (defaults to ~/.config/muxy/worktree.json).";
 "Optional teardown commands (review before enabling):" = "Optional teardown commands (review before enabling):";
 "Orange" = "Orange";
+"Order the worktree switcher by recent use" = "Order the worktree switcher by recent use";
 "Outline" = "Outline";
 "Output changed; search again" = "Output changed; search again";
 "Owner: %@" = "Owner: %@";
@@ -1189,6 +1193,7 @@
 "Search sidebars…" = "Search sidebars…";
 "Search symbols…" = "Search symbols…";
 "Search with %@ or enter a website address." = "Search with %@ or enter a website address.";
+"Search worktrees…" = "Search worktrees…";
 "Searches typed in the address bar use this engine." = "Searches typed in the address bar use this engine.";
 "Search…" = "Search…";
 "Select All" = "Select All";
@@ -1246,6 +1251,7 @@
 "Show Worktrees" = "Show Worktrees";
 "Show a one-time code to scan with the Muxy app." = "Show a one-time code to scan with the Muxy app.";
 "Show a persistent home-directory shell with a shortcut." = "Show a persistent home-directory shell with a shortcut.";
+"Show agents panel" = "Show agents panel";
 "Show all" = "Show all";
 "Show an enabled extension's sidebar in place of the built-in one." = "Show an enabled extension's sidebar in place of the built-in one.";
 "Show connection and terminal information at the bottom of the workspace." = "Show connection and terminal information at the bottom of the workspace.";
@@ -1289,6 +1295,7 @@
 "Stopping…" = "Stopping…";
 "Switch Project…" = "Switch Project…";
 "Switch Workspace…" = "Switch Workspace…";
+"Switch Worktree…" = "Switch Worktree…";
 "Switch to a branch before committing" = "Switch to a branch before committing";
 "Switch to a branch before creating a pull request" = "Switch to a branch before creating a pull request";
 "Switched to %@ and brought it up to date." = "Switched to %@ and brought it up to date.";
@@ -1616,6 +1623,7 @@
 "new home tab" = "new home tab";
 "new tab" = "new tab";
 "new tab in project" = "new tab in project";
+"new worktree" = "new worktree";
 "next project" = "next project";
 "next prompt" = "next prompt";
 "next tab" = "next tab";
@@ -1668,6 +1676,7 @@
 "show all" = "show all";
 "split down" = "split down";
 "split right" = "split right";
+"switch worktree" = "switch worktree";
 "terminal close find" = "terminal close find";
 "text input backspace" = "text input backspace";
 "text input cancel" = "text input cancel";

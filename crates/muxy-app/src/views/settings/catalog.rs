@@ -392,6 +392,15 @@ pub(super) const SETTINGS: &[Setting] = &[
         section: tr_key!("Interface"),
     },
     Setting {
+        id: "worktree-recent-order",
+        label: tr_key!("Order the worktree switcher by recent use"),
+        description: tr_key!(
+            "List the current worktree first, then the most recently used. Off, the project comes first, then its worktrees."
+        ),
+        category: Category::Appearance,
+        section: tr_key!("Interface"),
+    },
+    Setting {
         id: "extension-sidebar",
         label: tr_key!("Active sidebar"),
         description: tr_key!("Show an enabled extension's sidebar in place of the built-in one."),

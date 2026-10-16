@@ -367,6 +367,7 @@ impl AppModel {
                 match key {
                     "auto-expand-worktrees" => settings.appearance.auto_expand_worktrees = value,
                     "worktree-unread" => settings.appearance.worktree_show_unread = value,
+                    "worktree-recent-order" => settings.appearance.worktree_recent_order = value,
                     _ => return Ok(()),
                 }
                 settings.appearance = settings.appearance.save_changes(&self.appearance, &path)?;

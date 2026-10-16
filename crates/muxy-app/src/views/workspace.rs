@@ -27,6 +27,8 @@ actions!(
         DetachTerminal,
         NewHomeTab,
         NewTabInProject,
+        NewWorktree,
+        SwitchWorktree,
         CloseTab,
         SplitRight,
         SplitDown,
@@ -103,6 +105,8 @@ fn workspace_bindings(keymap: &impl muxy_core::shortcuts::ShortcutSettings) -> V
     registry.register(ShortcutId::OpenSettings, &OpenSettings);
     registry.register(ShortcutId::NewHomeTab, &NewHomeTab);
     registry.register(ShortcutId::NewTabInProject, &NewTabInProject);
+    registry.register(ShortcutId::NewWorktree, &NewWorktree);
+    registry.register(ShortcutId::SwitchWorktree, &SwitchWorktree);
     registry.register(ShortcutId::ToggleSidebar, &ToggleSidebar);
     registry.register(ShortcutId::ToggleAgentsPanel, &ToggleAgentsPanel);
     registry.register(ShortcutId::ToggleFullScreen, &ToggleFullScreen);
@@ -412,6 +416,17 @@ fn action_handlers(cx: &mut Context<AppModel>) -> gpui::Div {
         .on_action(cx.listener(|model, _: &NewTabInProject, window, cx| {
             model.toggle_new_tab_list(window, cx);
         }))
+        .on_action(cx.listener(|model, _: &NewWorktree, window, cx| {
+            if model.close_prompt.is_none()
+                && let Some(project) = model.new_worktree_target()
+            {
+                model.open_git_form(project, true, cx);
+                model.focus_git_form(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|model, _: &SwitchWorktree, window, cx| {
+            model.toggle_worktree_switcher(window, cx);
+        }))
         .on_action(cx.listener(|model, _: &PreviousProject, _, cx| model.cycle_project(false, cx)))
         .on_action(cx.listener(|model, _: &NextProject, _, cx| model.cycle_project(true, cx)))
         .on_action(cx.listener(|model, action: &SelectProject, _, cx| {
@@ -663,6 +678,32 @@ fn register_app_commands(
     }
 }
 
+fn register_worktree_commands(
+    registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
+    model: &AppModel,
+) {
+    use super::command_palette::action;
+
+    for command in [
+        action(
+            model,
+            ShortcutId::NewWorktree,
+            tr_key!("New Worktree…"),
+            NewWorktree,
+        )
+        .disabled(model.new_worktree_target().is_none()),
+        action(
+            model,
+            ShortcutId::SwitchWorktree,
+            tr_key!("Switch Worktree…"),
+            SwitchWorktree,
+        )
+        .disabled(model.worktree_switcher_project().is_none()),
+    ] {
+        registry.register(command);
+    }
+}
+
 pub(crate) fn register_commands(
     registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
     model: &AppModel,
@@ -760,6 +801,7 @@ pub(crate) fn register_commands(
     ] {
         registry.register(command);
     }
+    register_worktree_commands(registry, model);
     register_terminal_commands(registry, model);
     register_pane_focus_commands(registry, model, unsplit);
     register_app_commands(registry, model);

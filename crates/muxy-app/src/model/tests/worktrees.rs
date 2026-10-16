@@ -1,6 +1,7 @@
 use super::git::registered_current_project;
 use super::*;
 use muxy_protocol::{GitWorktree, ProjectMutation, ServerPath};
+use muxy_ui::picker::{Picker, PickerItem, PickerRow};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
@@ -653,4 +654,402 @@ fn disconnect_discards_a_merge_removal_waiting_for_confirmation(cx: &mut TestApp
     cx.run_until_parked();
     assert!(!cx.has_pending_prompt());
     assert!(!view.read_with(cx, |model, _| model.worktree_removing(worktree)));
+}
+
+#[gpui::test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "Exercise both orders, switching, and removal on one switcher"
+)]
+fn worktree_switcher_lists_this_projects_worktrees_by_recent_use_and_removes_through_inspection(
+    cx: &mut TestAppContext,
+) {
+    use muxy_protocol::{GitAction, GitRequest};
+    use muxy_ui::picker::PickerEvent;
+
+    let (state, root, _, _directory) = pruning_fixture();
+    let (boot, requests) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    cx.simulate_resize(size(px(1200.0), px(800.0)));
+    let mut sent = Sent(requests, Vec::new());
+    view.update(cx, |model, _| {
+        model.servers.local.connection = ConnectionState::Ready;
+    });
+    let switcher = |view: &Entity<AppModel>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |model, _| match &model.overlay {
+            Some(Overlay::Worktrees(switcher)) => Some(switcher.picker.clone()),
+            _ => None,
+        })
+    };
+    let row_top = |id: ProjectId, cx: &mut VisualTestContext| {
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
+        cx.debug_bounds(format!("picker-row-{id}").leak())
+            .map(|bounds| bounds.top())
+    };
+
+    let in_order = |order: &[ProjectId], cx: &mut VisualTestContext| {
+        let tops: Vec<_> = order
+            .iter()
+            .map(|id| row_top(*id, cx).expect("listed"))
+            .collect();
+        tops.windows(2).all(|pair| pair[0] < pair[1])
+    };
+
+    cx.run_until_parked();
+    let order: Vec<_> = view.update(cx, |model, cx| {
+        model.appearance.worktree_recent_order = false;
+        let order: Vec<_> = std::iter::once(root)
+            .chain(model.worktree_children(root).iter().map(|child| child.id))
+            .collect();
+        model.select_project(order[1], cx);
+        order
+    });
+    assert_eq!(order.len(), 4);
+    let [first, below, removed] = [order[1], order[2], order[3]];
+    cx.simulate_keystrokes("cmd-alt-w");
+    assert!(switcher(&view, cx).is_some());
+    assert!(
+        in_order(&order, cx),
+        "without recent order: the project itself, then its worktrees in sidebar order"
+    );
+    let home = view.read_with(cx, |model, _| model.state.home().id);
+    assert_eq!(row_top(home, cx), None, "other projects are not listed");
+    cx.simulate_keystrokes("down enter");
+    view.read_with(cx, |model, _| {
+        assert!(model.overlay.is_none());
+        assert_eq!(model.state.current_project().id, below);
+    });
+
+    view.update(cx, |model, cx| {
+        model.appearance.worktree_recent_order = true;
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("cmd-alt-w");
+    assert!(
+        in_order(&[below, first, root, removed], cx),
+        "the current worktree, then the most recently used, then never-used ones"
+    );
+    cx.simulate_keystrokes("down enter");
+    view.read_with(cx, |model, _| {
+        assert_eq!(
+            model.state.current_project().id,
+            first,
+            "down and return goes back to the previous worktree"
+        );
+    });
+
+    cx.simulate_keystrokes("cmd-alt-w");
+    let picker = switcher(&view, cx).expect("switcher");
+    sent.take();
+    picker.update(cx, |_, cx| {
+        cx.emit(PickerEvent::RowAction {
+            row: removed.to_string().into(),
+            action: "remove".into(),
+        });
+    });
+    cx.run_until_parked();
+    assert!(
+        sent.take().iter().any(|work| matches!(
+            work,
+            Work::Git(GitRequest { project, action: GitAction::InspectRemoval }) if *project == removed
+        )),
+        "removal starts with the inspection that leads to its confirmation"
+    );
+    view.read_with(cx, |model, _| {
+        assert!(
+            model.state.project(removed).is_some(),
+            "nothing is removed yet"
+        );
+        assert_eq!(model.state.current_project().id, first);
+    });
+
+    view.update(cx, |model, cx| {
+        model.dismiss_overlay(cx);
+        model.select_project(model.state.home().id, cx);
+    });
+    cx.simulate_keystrokes("cmd-alt-w");
+    assert!(switcher(&view, cx).is_none(), "Home has no worktrees");
+}
+
+fn open_worktree_switcher(view: &Entity<AppModel>, cx: &mut VisualTestContext) -> Entity<Picker> {
+    view.update_in(cx, |model, window, cx| {
+        crate::views::workspace::bind_keys(&model.settings.keymap, cx);
+        model.toggle_worktree_switcher(window, cx);
+        let Some(Overlay::Worktrees(switcher)) = &model.overlay else {
+            panic!("worktree switcher did not open");
+        };
+        switcher.picker.clone()
+    })
+}
+
+fn switcher_row(
+    picker: &Entity<Picker>,
+    id: ProjectId,
+    cx: &mut VisualTestContext,
+) -> Option<PickerRow> {
+    picker.read_with(cx, |picker, _| {
+        picker.items().iter().find_map(|item| match item {
+            PickerItem::Row(row) if row.id == id.to_string() => Some(row.clone()),
+            _ => None,
+        })
+    })
+}
+
+#[gpui::test]
+fn worktree_switcher_refreshes_progress_and_agent_activity_while_open(cx: &mut TestAppContext) {
+    use muxy_protocol::{
+        ActivitySnapshot, AgentActivity, AgentProvider, AgentState, ProgressState, SessionProgress,
+        TerminalProgress,
+    };
+
+    let (mut state, root, [worktree, _, _], _directory) = pruning_fixture();
+    state.open_terminal_tab(worktree).expect("tab");
+    let pane = state.window().active_pane.expect("pane");
+    let session = SessionId::new(42).expect("session");
+    state
+        .set_pane_session(pane, Some(session))
+        .expect("session");
+    state.select_project(root).expect("parent");
+    let (view, cx, _sent) = connected(state, cx);
+    let picker = open_worktree_switcher(&view, cx);
+    for (state, expected) in [
+        (Some(ProgressState::Running), "Working"),
+        (Some(ProgressState::Paused), "Work is paused."),
+        (Some(ProgressState::Error), "Work reported an error."),
+        (None, "Finished working"),
+    ] {
+        view.update(cx, |model, cx| {
+            model.receive_progress(
+                ServerId::local(),
+                session,
+                SessionProgress {
+                    progress: state.map(|state| TerminalProgress {
+                        state,
+                        percent: Some(50),
+                    }),
+                    completed: u64::from(state.is_none()),
+                },
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            switcher_row(&picker, worktree, cx)
+                .expect("worktree")
+                .trailing
+                .as_ref()
+                .map(AsRef::as_ref),
+            Some(expected)
+        );
+    }
+    for (state, expected) in [
+        (AgentState::Working, Some("Working")),
+        (AgentState::Blocked, Some("Blocked")),
+        (AgentState::Idle, None),
+    ] {
+        view.update(cx, |model, cx| {
+            model.receive_activity(
+                ServerId::local(),
+                Ok(ActivitySnapshot {
+                    agents: vec![AgentActivity {
+                        session,
+                        project: worktree,
+                        provider: AgentProvider::Codex,
+                        state,
+                    }],
+                    ..ActivitySnapshot::default()
+                }),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            switcher_row(&picker, worktree, cx)
+                .expect("worktree")
+                .trailing
+                .as_ref()
+                .map(AsRef::as_ref),
+            expected
+        );
+    }
+}
+
+#[gpui::test]
+fn worktree_switcher_refreshes_catalog_without_losing_query_or_selection(cx: &mut TestAppContext) {
+    let (state, root, [selected, removed, _], directory) = pruning_fixture();
+    let (view, cx, _sent) = connected(state, cx);
+    let picker = open_worktree_switcher(&view, cx);
+    let query = directory.path().to_string_lossy().into_owned();
+    picker.update(cx, |picker, cx| picker.set_query(query.clone(), cx));
+    cx.run_until_parked();
+    picker.update(cx, |picker, cx| {
+        picker
+            .select_row(&selected.to_string(), cx)
+            .expect("selected");
+    });
+    let added = view.update(cx, |model, cx| {
+        let mut projects: Vec<_> = model
+            .state
+            .projects()
+            .iter()
+            .filter(|project| project.id != removed)
+            .map(muxy_app_core::Project::descriptor)
+            .collect();
+        let renamed = projects
+            .iter_mut()
+            .find(|project| project.id == selected)
+            .expect("selected");
+        renamed.name = "Renamed worktree".into();
+        let mut added = renamed.clone();
+        added.id = ProjectId::new();
+        added.name = "Added worktree".into();
+        let path = directory.path().join(added.id.to_string());
+        std::fs::create_dir(&path).expect("worktree");
+        added.directory = ServerPath(path.as_os_str().as_bytes().to_vec());
+        let id = added.id;
+        projects.push(added);
+        model.receive_catalog(
+            ServerId::local(),
+            Ok(muxy_protocol::CatalogPage {
+                server: muxy_protocol::ServerIdentity::from_u128(1),
+                home: model.state.home().id,
+                revision: model.state.catalog_revision(ServerId::local()) + 1,
+                projects,
+                next: None,
+                legacy_home: None,
+            }),
+            cx,
+        );
+        id
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        switcher_row(&picker, selected, cx).expect("renamed").title,
+        "Renamed worktree"
+    );
+    assert_eq!(
+        switcher_row(&picker, added, cx).expect("added").title,
+        "Added worktree"
+    );
+    assert!(switcher_row(&picker, removed, cx).is_none());
+    assert!(
+        switcher_row(&picker, root, cx).is_none(),
+        "the search still filters the rows"
+    );
+    assert_eq!(
+        picker.read_with(cx, |picker, _| picker.query().to_owned()),
+        query
+    );
+    cx.simulate_keystrokes("enter");
+    assert_eq!(
+        view.read_with(cx, |model, _| model.state.current_project().id),
+        selected
+    );
+    open_worktree_switcher(&view, cx);
+    view.update(cx, |model, cx| {
+        model.appearance.hidden_worktrees.insert(root);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |model, _| model.overlay.is_none()));
+}
+
+#[gpui::test]
+fn new_worktree_shortcut_branches_from_the_parent_and_skips_projects_without_worktrees(
+    cx: &mut TestAppContext,
+) {
+    let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
+    let home = state.home().id;
+    state.select_project(worktree).expect("worktree");
+    let (boot, _) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    let form = |view: &Entity<AppModel>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |model, _| match &model.overlay {
+            Some(Overlay::GitForm(form)) => Some(form.target()),
+            _ => None,
+        })
+    };
+    cx.simulate_keystrokes("cmd-alt-n");
+    assert_eq!(
+        form(&view, cx),
+        Some((root, true)),
+        "a worktree's new worktree branches from its project"
+    );
+    cx.simulate_keystrokes("escape");
+    assert_eq!(form(&view, cx), None, "escape closes the form it opened");
+
+    cx.simulate_keystrokes("cmd-alt-w");
+    cx.run_until_parked();
+    let create = cx
+        .debug_bounds("picker-footer-new-worktree")
+        .expect("create");
+    cx.simulate_click(create.center(), Modifiers::default());
+    cx.run_until_parked();
+    assert_eq!(form(&view, cx), Some((root, true)));
+    cx.simulate_keystrokes("escape");
+    assert_eq!(form(&view, cx), None, "the picker also focuses the form");
+
+    for setup in [
+        Box::new(move |model: &mut AppModel, cx: &mut Context<AppModel>| {
+            model.select_project(home, cx);
+        }) as Box<dyn Fn(&mut AppModel, &mut Context<AppModel>)>,
+        Box::new(move |model, cx| {
+            model.select_project(root, cx);
+            model.toggle_worktree_visibility(root, cx);
+        }),
+    ] {
+        view.update(cx, |model, cx| {
+            model.dismiss_overlay(cx);
+            setup(model, cx);
+        });
+        cx.simulate_keystrokes("cmd-alt-n");
+        assert_eq!(form(&view, cx), None);
+    }
+}
+
+#[gpui::test]
+fn new_worktree_shortcut_skips_a_folder_git_reports_is_not_a_repository(cx: &mut TestAppContext) {
+    let (state, project) = registered_current_project();
+    let (view, cx, _sent) = connected(state, cx);
+    view.update(cx, |model, _| {
+        assert_eq!(model.new_worktree_target(), Some(project));
+        model.git.projects.entry(project).or_default().loaded = true;
+        assert_eq!(model.new_worktree_target(), None);
+    });
+}
+
+#[gpui::test]
+fn new_worktree_form_stays_closed_when_the_parent_is_no_longer_a_repository(
+    cx: &mut TestAppContext,
+) {
+    let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
+    state.select_project(worktree).expect("worktree");
+    let (boot, _) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    view.update(cx, |model, _| {
+        model.git.projects.entry(root).or_default().loaded = true;
+        assert_eq!(model.new_worktree_target(), None, "the command is disabled");
+    });
+    cx.simulate_keystrokes("cmd-alt-n");
+    view.update(cx, |model, cx| {
+        assert!(model.overlay.is_none(), "the shortcut opens no form");
+        model.open_git_form(root, true, cx);
+        assert!(model.overlay.is_none(), "the sidebar row opens no form");
+    });
+    open_worktree_switcher(&view, cx);
+    cx.run_until_parked();
+    let create = cx
+        .debug_bounds("picker-footer-new-worktree")
+        .expect("create");
+    cx.simulate_click(create.center(), Modifiers::default());
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |model, _| matches!(
+        model.overlay,
+        Some(Overlay::Worktrees(_))
+    )));
 }
