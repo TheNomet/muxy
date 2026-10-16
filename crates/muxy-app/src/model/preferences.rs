@@ -114,6 +114,8 @@ impl AppModel {
             ..WindowOptions::default()
         };
         match cx.open_window(options, move |window, cx| {
+            #[cfg(target_os = "linux")]
+            crate::views::titlebar::linux::adopt_system_frame(window, &tr!("Muxy Settings"));
             let model = weak.clone();
             window.on_window_should_close(cx, move |_, cx| {
                 let _ = model.update(cx, |model, cx| {
@@ -142,6 +144,7 @@ impl AppModel {
     }
 
     pub(crate) fn settings_closed(&mut self, cx: &mut Context<Self>) {
+        self.record_quick_shortcut(false, cx);
         self.flush_preferences(cx);
         self.withdraw_pairing(cx);
         self.retain_extension_updates(cx);
@@ -163,6 +166,7 @@ impl AppModel {
         settings.appearance = self.appearance.clone();
         Snapshot {
             quick_shortcut_status: self.quick_shortcut_status(),
+            capabilities: self.capabilities.clone(),
             settings,
             terminal: self.terminal.clone(),
             server: self.server_preferences.document.clone(),
@@ -553,12 +557,16 @@ impl AppModel {
                 settings.save_composer(&path)?;
             }
             Change::Field(
-                id @ ("composer-font" | "composer-line-height" | "composer-language"),
+                id @ ("composer-font"
+                | "composer-line-height"
+                | "composer-language"
+                | "composer-voice-model"),
                 value,
             ) => {
                 match id {
                     "composer-font" => settings.composer.font_family = value,
                     "composer-language" => settings.composer.language = value,
+                    "composer-voice-model" => settings.composer.voice_model = value,
                     _ => settings.composer.line_height = value.parse()?,
                 }
                 settings.save_composer(&path)?;

@@ -6,6 +6,7 @@
 //! server execution.
 
 pub mod bundle;
+pub mod capability;
 pub mod dirs;
 pub mod executable;
 pub mod file_lock;

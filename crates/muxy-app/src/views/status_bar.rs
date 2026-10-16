@@ -172,7 +172,7 @@ fn path_chip(model: &AppModel, cx: &mut Context<AppModel>) -> impl IntoElement {
                         let mut items = vec![Item::action(tr!("Copy Path"), Command::CopyPath(id))];
                         if local {
                             items.push(Item::action(
-                                tr!("Reveal in Finder"),
+                                crate::opener::reveal_label(),
                                 Command::RevealPath(id),
                             ));
                         }

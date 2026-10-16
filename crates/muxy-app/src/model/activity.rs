@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use gpui::Context;
 use muxy_app_core::{PaneId, ServerId, TabId};
 use muxy_client::ClientError;
+use muxy_core::capability::Feature;
 use muxy_protocol::{ActivitySnapshot, AgentActivity, SessionId};
 use muxy_ui::tr;
 
@@ -30,7 +31,6 @@ fn notification_id(server: ServerId, id: u64) -> String {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn activity_description(kind: muxy_protocol::ActivityKind) -> gpui::SharedString {
     use muxy_protocol::ActivityKind;
     match kind {
@@ -138,11 +138,8 @@ impl AppModel {
             })
             .map(|event| event.id)
             .collect();
-        #[cfg(target_os = "macos")]
-        if !removed.is_empty()
-            && let Some(notifications) = &self.notifications
-        {
-            notifications.clear(
+        if !removed.is_empty() {
+            self.notifications.clear(
                 &removed
                     .iter()
                     .map(|id| notification_id(server, *id))
@@ -205,7 +202,6 @@ impl AppModel {
                     !event.read && !activity.ended_during_read.contains(&event.session)
                 });
                 activity.ended_during_read.clear();
-                #[cfg(target_os = "macos")]
                 let removed: Vec<_> = {
                     let retained: HashSet<_> =
                         snapshot.events.iter().map(|event| event.id).collect();
@@ -223,10 +219,7 @@ impl AppModel {
                     focused,
                 );
                 activity.snapshot = snapshot;
-                #[cfg(target_os = "macos")]
-                if let Some(notifications) = &self.notifications {
-                    notifications.clear(&removed);
-                }
+                self.notifications.clear(&removed);
                 self.activity_notifications_posted(server, &ids, cx);
                 self.sync_activity_panes(server, self.state.session_references(server));
                 let ids: Vec<_> = self
@@ -252,7 +245,7 @@ impl AppModel {
                 activity.ack_failed = false;
                 self.resume_activity_navigation(server, cx);
                 self.acknowledge_focused_activity(cx);
-                if !ids.is_empty() {
+                if !ids.is_empty() && self.supports(Feature::Notifications) {
                     self.send(server, Work::ClaimActivity(ids), cx);
                 }
                 if self
@@ -305,14 +298,11 @@ impl AppModel {
         if activity.navigation.is_some_and(|id| ids.contains(&id)) {
             activity.navigation = None;
         }
-        #[cfg(target_os = "macos")]
-        if let Some(notifications) = &self.notifications {
-            notifications.clear(
-                &ids.iter()
-                    .map(|id| notification_id(server, *id))
-                    .collect::<Vec<_>>(),
-            );
-        }
+        self.notifications.clear(
+            &ids.iter()
+                .map(|id| notification_id(server, *id))
+                .collect::<Vec<_>>(),
+        );
         cx.notify();
     }
 
@@ -379,14 +369,11 @@ impl AppModel {
                     .snapshot
                     .events
                     .retain(|event| !ids.contains(&event.id));
-                #[cfg(target_os = "macos")]
-                if let Some(notifications) = &self.notifications {
-                    notifications.clear(
-                        &ids.iter()
-                            .map(|id| notification_id(server, *id))
-                            .collect::<Vec<_>>(),
-                    );
-                }
+                self.notifications.clear(
+                    &ids.iter()
+                        .map(|id| notification_id(server, *id))
+                        .collect::<Vec<_>>(),
+                );
                 self.refresh_activity(server, cx);
             }
             Err(error) => {
@@ -404,28 +391,23 @@ impl AppModel {
         let Ok(ids) = result else {
             return;
         };
-        #[cfg(target_os = "macos")]
-        if let Some(notifications) = &self.notifications {
-            for event in self.activity_notification_events(server, &ids) {
-                let project = self
-                    .state
-                    .project(event.project)
-                    .map_or("Muxy", |project| project.name.as_str());
-                let title = match self.server_name(server) {
-                    Some(name) if !server.is_local() => {
-                        format!("{} · {project} · {name}", event.provider.name())
-                    }
-                    _ => format!("{} · {project}", event.provider.name()),
-                };
-                notifications.deliver(
-                    &notification_id(server, event.id),
-                    &title,
-                    &activity_description(event.kind),
-                );
-            }
+        for event in self.activity_notification_events(server, &ids) {
+            let project = self
+                .state
+                .project(event.project)
+                .map_or("Muxy", |project| project.name.as_str());
+            let title = match self.server_name(server) {
+                Some(name) if !server.is_local() => {
+                    format!("{} · {project} · {name}", event.provider.name())
+                }
+                _ => format!("{} · {project}", event.provider.name()),
+            };
+            self.notifications.deliver(
+                &notification_id(server, event.id),
+                &title,
+                &activity_description(event.kind),
+            );
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = (server, ids);
     }
 
     pub(crate) fn navigate_activity(&mut self, server: ServerId, id: u64, cx: &mut Context<Self>) {
@@ -464,7 +446,9 @@ impl AppModel {
             self.focus_pane(pane, cx);
             self.dismiss_overlay(cx);
             self.focus_requested = true;
-        } else if server.is_local() && !self.quick.visible {
+            self.raise_window(cx);
+        } else if server.is_local() && !self.quick.visible && self.supports(Feature::QuickTerminal)
+        {
             self.toggle_quick_terminal(cx);
         }
     }
@@ -478,28 +462,41 @@ impl AppModel {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    pub(super) fn start_notifications(
+    /// Navigates to the activity behind each notification the user opens,
+    /// and keeps up with whether notifications can still be shown.
+    pub(super) fn follow_notifications(
+        events: async_channel::Receiver<muxy_ui::notifications::Event>,
         cx: &mut Context<Self>,
-    ) -> Option<muxy_ui::notifications::Notifications> {
-        let (notifications, events) = muxy_ui::notifications::Notifications::new()?;
+    ) {
+        use muxy_ui::notifications::Event;
         cx.spawn(async move |this, cx| {
-            while let Ok(identifier) = events.recv().await {
-                let Some((server, id)) = notification_event(&identifier) else {
-                    continue;
-                };
-                if this
-                    .update(cx, |model, cx| {
-                        cx.activate(true);
-                        model.navigate_activity(server, id, cx);
-                    })
-                    .is_err()
-                {
+            while let Ok(event) = events.recv().await {
+                let followed = this.update(cx, |model, cx| match event {
+                    Event::Opened(identifier) => {
+                        if let Some((server, id)) = notification_event(&identifier) {
+                            cx.activate(true);
+                            model.navigate_activity(server, id, cx);
+                        }
+                    }
+                    Event::Capability(capability) => {
+                        model.capabilities.set(Feature::Notifications, capability);
+                        cx.notify();
+                    }
+                });
+                if followed.is_err() {
                     break;
                 }
             }
         })
         .detach();
-        Some(notifications)
+    }
+
+    /// Brings the main window to the front, as far as the desktop lets an
+    /// app do that.
+    pub(crate) fn raise_window(&self, cx: &mut Context<Self>) {
+        let window = self.window;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, window, _| window.activate_window());
+        });
     }
 }

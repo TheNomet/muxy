@@ -58,7 +58,7 @@ impl SettingsView {
     ) {
         self.finish_terminal_slider(cx);
         self.recording = None;
-        self.quick_recording = None;
+        self.cancel_quick_recording(cx);
         if section.is_none()
             && self.category == category
             && self.query.is_empty()

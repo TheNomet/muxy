@@ -78,8 +78,10 @@ Panels, the sidebar, and bar items take an `icon`:
 ```
 
 - `symbol` is an [SF Symbol](https://developer.apple.com/sf-symbols/) name.
+  Linux has no SF Symbols: it draws the common ones from its own icons and
+  the extension icon in place of the rest.
 - `svg` is a file of up to 256 KiB. It is tinted like the app's own icons, so
-  use `currentColor` or one solid color.
+  use `currentColor` or one solid color. It looks the same on macOS and Linux.
 
 ## Settings
 

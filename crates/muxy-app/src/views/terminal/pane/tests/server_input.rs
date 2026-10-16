@@ -44,6 +44,31 @@ fn record(
 #[gpui::test]
 fn server_keys_join_text_input_and_report_repeat_and_paired_release(cx: &mut TestAppContext) {
     let (pane, cx) = cx.add_window_view(pane);
+    pane.update(cx, |pane, _| {
+        for (key, action) in [
+            (
+                "cmd-backspace",
+                muxy_app_core::settings::TerminalAction::Text(b"\x15".to_vec()),
+            ),
+            (
+                "cmd-left",
+                muxy_app_core::settings::TerminalAction::Text(b"\x01".to_vec()),
+            ),
+            (
+                "cmd-right",
+                muxy_app_core::settings::TerminalAction::Text(b"\x05".to_vec()),
+            ),
+            (
+                "cmd-k",
+                muxy_app_core::settings::TerminalAction::ClearScreen,
+            ),
+        ] {
+            pane.terminal
+                .keybindings
+                .bindings
+                .insert(key.parse().unwrap(), action);
+        }
+    });
     let sent = record(&pane, cx);
     cx.simulate_keystrokes("a");
     cx.simulate_event(gpui::KeyDownEvent {

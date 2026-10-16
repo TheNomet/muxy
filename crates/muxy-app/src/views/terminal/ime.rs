@@ -169,15 +169,14 @@ pub(super) fn paint(view: &Entity<TerminalPane>, window: &mut Window, cx: &mut A
         pane.terminal
             .font_families
             .first()
-            .cloned()
-            .unwrap_or_else(|| "Menlo".into()),
+            .map_or_else(|| "Menlo".into(), |family| muxy_ui::font::family(family)),
     );
     base_font.fallbacks = Some(gpui::FontFallbacks::from_fonts(
         pane.terminal
             .font_families
             .iter()
             .skip(1)
-            .cloned()
+            .map(|family| muxy_ui::font::family(family).into())
             .collect(),
     ));
     let foreground = rgb(pane.palette.foreground);

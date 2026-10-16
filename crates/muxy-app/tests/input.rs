@@ -1,7 +1,9 @@
 #[path = "../src/views/terminal/input.rs"]
 mod input;
 
+#[cfg(target_os = "macos")]
 use gpui::Keystroke;
+#[cfg(target_os = "macos")]
 use muxy_protocol::Modes;
 
 #[cfg(target_os = "macos")]

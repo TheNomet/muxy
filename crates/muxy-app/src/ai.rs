@@ -523,11 +523,32 @@ mod tests {
     }
 
     fn alive(pid: &str) -> bool {
-        Command::new("/bin/kill")
-            .args(["-0", pid.trim()])
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success())
+        let output = Command::new("ps")
+            .args(["-o", "stat=", "-p", pid.trim()])
+            .output()
+            .unwrap();
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .split_whitespace()
+            .any(|state| !state.starts_with('Z'))
+    }
+
+    fn assert_stopped(pid: &str) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while alive(pid) {
+            assert!(Instant::now() < deadline, "helper {pid} is still running");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn killed_helpers_are_not_alive_before_their_parent_reaps_them() {
+        let mut child = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+        let pid = child.id().to_string();
+        assert!(alive(&pid));
+        child.kill().unwrap();
+        assert_stopped(&pid);
+        child.wait().unwrap();
     }
 
     #[test]
@@ -541,7 +562,7 @@ mod tests {
             &Cancellation::default(),
         );
         assert_eq!(result, Err(Failure::TimedOut(Duration::from_millis(300))));
-        assert!(!alive(&std::fs::read_to_string(pid).unwrap()));
+        assert_stopped(&std::fs::read_to_string(pid).unwrap());
     }
 
     #[test]

@@ -110,7 +110,7 @@ impl AppModel {
         let text = self.configured_ai_prompt(Action::CreatePullRequest, Some(menu.project));
         let input = cx.new(|cx| {
             TextInput::new(InputStyle::field(&self.theme, &self.metrics), cx)
-                .with_font_family("monospace")
+                .with_font_family(muxy_ui::font::monospace())
                 .multiline()
                 .with_text(text)
         });

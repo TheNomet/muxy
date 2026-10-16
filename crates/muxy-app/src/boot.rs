@@ -483,7 +483,7 @@ pub(crate) enum Update {
         restart: bool,
         result: Result<(), ClientError>,
     },
-    PreparedForInstall(Result<Option<std::fs::File>, ClientError>),
+    PreparedForInstall(Result<Option<muxy_core::file_lock::FileLock>, ClientError>),
     ServerInfo(muxy_protocol::ServerInfo),
     ServerChecked(Result<ServerUpdate, ClientError>),
     /// Why connecting failed, and for another computer, the kind of failure.

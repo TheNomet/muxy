@@ -401,7 +401,8 @@ impl AppModel {
                         project.icon,
                         project.color.as_str(),
                         project.logo.as_ref().map(|logo| logo.len()),
-                        project.directory,
+                        // A folder's name need not be text, which a path as JSON must be.
+                        project.directory.as_os_str().as_encoded_bytes(),
                     ])
                 })
                 .collect(),

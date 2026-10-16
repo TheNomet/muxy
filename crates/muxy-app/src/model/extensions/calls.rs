@@ -258,9 +258,9 @@ impl AppModel {
             return Err("notification requires title or body".into());
         }
         self.show_toast(title.clone(), Some(body.clone()), cx);
-        if let Some(notifications) = &self.notifications {
+        if self.supports(muxy_core::capability::Feature::Notifications) {
             self.extensions.next += 1;
-            notifications.deliver(
+            self.notifications.inform(
                 &format!("extension:{}:{}", call.owner, self.extensions.next),
                 if title.is_empty() {
                     &call.owner

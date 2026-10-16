@@ -560,7 +560,11 @@ fn run_projects_live_walkthrough(cx: &mut TestAppContext) -> Result {
     let probe = Client::connect(&directory.join("server.sock"))?;
     assert_eq!(probe.list_sessions()?.len(), 2);
     report("24.1: two projects start empty; new tabs run in their respective folders")?;
-    cx.simulate_keystrokes("cmd-alt-[");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-alt-["
+    } else {
+        "ctrl-alt-{"
+    });
     wait(cx, &view, |model, cx| {
         model.state.current_project().id == first && active_grid(model, cx).is_some()
     })?;
@@ -671,7 +675,11 @@ fn command_o_opens_the_picker_and_existing_paths_select_the_project(cx: &mut Tes
     cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
     cx.simulate_resize(size(px(1200.0), px(800.0)));
-    cx.simulate_keystrokes("cmd-o");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-o"
+    } else {
+        "ctrl-shift-o"
+    });
     cx.run_until_parked();
     assert!(view.read_with(cx, |model, _| matches!(
         model.overlay,
@@ -680,7 +688,11 @@ fn command_o_opens_the_picker_and_existing_paths_select_the_project(cx: &mut Tes
     cx.simulate_input(&root.join("Alpha").to_string_lossy());
     cx.executor().advance_clock(Duration::from_millis(125));
     cx.run_until_parked();
-    cx.simulate_keystrokes("cmd-enter");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-enter"
+    } else {
+        "ctrl-shift-enter"
+    });
     cx.run_until_parked();
     view.read_with(cx, |model, _| {
         assert_eq!(model.state.current_project().id, project);
@@ -748,6 +760,26 @@ fn folders_from_the_command_line_select_their_project_or_add_it(cx: &mut TestApp
         assert_eq!(model.state.projects().len(), 3);
     });
     std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+/// On another computer, as macOS file systems refuse such names here.
+#[gpui::test]
+fn a_project_whose_folder_name_is_not_text_opens_like_any_other(cx: &mut TestAppContext) {
+    use std::os::unix::ffi::OsStringExt;
+    let odd = PathBuf::from(std::ffi::OsString::from_vec(b"/srv/caf\xe9 \xff".to_vec()));
+    let mut state = AppState::bootstrap().expect("state");
+    let server = ServerId::new();
+    state
+        .apply_catalog(server, &servers::page(2, ProjectId::new(), &[]))
+        .expect("remote catalog");
+    let project = state.add_project(server, odd.clone()).expect("project");
+    let (boot, _requests, _remotes) = remote_boot(state, vec![servers::entry(server, "box")]);
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    view.update(cx, |model, cx| {
+        model.select_project(project, cx);
+        model.sync_extension_events(cx);
+        assert_eq!(model.state.current_project().directory, odd);
+    });
 }
 
 #[gpui::test]
@@ -843,11 +875,19 @@ fn creating_a_project_folder_requires_the_explicit_create_confirmation(cx: &mut 
     boot.settings.projects.search_root = Some(root.clone());
     cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
-    cx.simulate_keystrokes("cmd-o");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-o"
+    } else {
+        "ctrl-shift-o"
+    });
     cx.simulate_input(&root.join("New").to_string_lossy());
     cx.executor().advance_clock(Duration::from_millis(125));
     cx.run_until_parked();
-    cx.simulate_keystrokes("cmd-enter");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-enter"
+    } else {
+        "ctrl-shift-enter"
+    });
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     assert!(!root.join("New").exists());
@@ -858,7 +898,11 @@ fn creating_a_project_folder_requires_the_explicit_create_confirmation(cx: &mut 
         view.read_with(cx, |model, _| model.state.projects().len()),
         1
     );
-    cx.simulate_keystrokes("cmd-enter");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-enter"
+    } else {
+        "ctrl-shift-enter"
+    });
     cx.run_until_parked();
     cx.simulate_prompt_answer("Create & Add");
     cx.run_until_parked();

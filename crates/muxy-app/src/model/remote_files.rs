@@ -231,11 +231,22 @@ fn local_path(path: &ServerPath) -> PathBuf {
 /// Copied files, or an image copied without text, which a terminal on
 /// another computer gets sent instead of their names or a paste key it can't
 /// act on. Text pastes as text, as it does here.
-pub(crate) fn clipboard_upload(item: &gpui::ClipboardItem) -> Option<Upload> {
+pub(crate) fn clipboard_upload(item: &gpui::ClipboardItem, cx: &gpui::App) -> Option<Upload> {
     #[cfg(not(test))]
-    let copied = muxy_ui::pasteboard::read_content().ok();
+    let copied = muxy_ui::pasteboard::read_content(cx).ok();
+    #[cfg(test)]
+    let _ = cx;
     #[cfg(test)]
     let copied: Option<muxy_ui::pasteboard::Content> = None;
+    upload_for(copied, item)
+}
+
+/// What one clipboard sends, from its two readings: `copied` knows files
+/// from the text a file manager offers beside them, `item` is what pastes.
+fn upload_for(
+    copied: Option<muxy_ui::pasteboard::Content>,
+    item: &gpui::ClipboardItem,
+) -> Option<Upload> {
     if let Some(muxy_ui::pasteboard::Content::Files(paths)) = copied {
         return Some(Upload::Files(paths));
     }
@@ -251,7 +262,7 @@ pub(crate) fn clipboard_upload(item: &gpui::ClipboardItem) -> Option<Upload> {
             image.bytes.clone(),
             image_extension(&image.bytes),
         )),
-        gpui::ClipboardEntry::String(_) => None,
+        gpui::ClipboardEntry::String(_) | gpui::ClipboardEntry::ExternalPaths(_) => None,
     })
 }
 
@@ -571,5 +582,43 @@ impl AppModel {
             }
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use muxy_ui::pasteboard::Content;
+
+    use super::*;
+
+    #[test]
+    fn copied_files_are_sent_though_their_names_are_also_on_the_clipboard_as_text() {
+        let names = gpui::ClipboardItem::new_string("/home/me/a b.txt\n/home/me/c.png".into());
+        let files = vec![
+            PathBuf::from("/home/me/a b.txt"),
+            PathBuf::from("/home/me/c.png"),
+        ];
+        assert!(matches!(
+            upload_for(Some(Content::Files(files.clone())), &names),
+            Some(Upload::Files(sent)) if sent == files
+        ));
+        assert!(
+            upload_for(Some(Content::Text), &names).is_none(),
+            "paths copied as text paste as text"
+        );
+        assert!(upload_for(None, &names).is_none());
+
+        let image = gpui::ClipboardItem::new_image(&gpui::Image::from_bytes(
+            gpui::ImageFormat::Png,
+            b"\x89PNG".to_vec(),
+        ));
+        assert!(matches!(
+            upload_for(Some(Content::Image(b"\xff\xd8\xff".to_vec())), &image),
+            Some(Upload::Image(_, "jpg"))
+        ));
+        assert!(matches!(
+            upload_for(None, &image),
+            Some(Upload::Image(_, "png"))
+        ));
     }
 }

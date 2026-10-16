@@ -452,6 +452,15 @@ fn action_handlers(cx: &mut Context<AppModel>) -> gpui::Div {
         .on_action(cx.listener(|model, _: &NavigateBack, _, cx| model.navigate(false, cx)))
         .on_action(cx.listener(|model, _: &NavigateForward, _, cx| model.navigate(true, cx)))
         .on_action(cx.listener(|_, _: &Minimize, window, _| window.minimize_window()))
+        .on_action(cx.listener(|model, _: &HideApp, _, cx| {
+            model.forward(muxy_core::capability::Feature::AppHiding, cx);
+        }))
+        .on_action(cx.listener(|model, _: &HideOthers, _, cx| {
+            model.forward(muxy_core::capability::Feature::AppHiding, cx);
+        }))
+        .on_action(cx.listener(|model, _: &ShowAll, _, cx| {
+            model.forward(muxy_core::capability::Feature::AppHiding, cx);
+        }))
         .on_action(cx.listener(|_, _: &Zoom, window, _| window.zoom_window()))
         .on_action(cx.listener(titlebar::begin_window_move))
         .on_action(
@@ -464,10 +473,201 @@ fn action_handlers(cx: &mut Context<AppModel>) -> gpui::Div {
         .on_action(cx.listener(|model, _: &DecreaseFontSize, _, cx| model.zoom_terminal(-1.0, cx)))
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "One command palette registration list"
-)]
+fn register_composer_commands(
+    registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
+    model: &AppModel,
+) {
+    use super::command_palette::action;
+
+    registry.register(action(
+        model,
+        ShortcutId::ToggleComposer,
+        tr_key!("Toggle Composer"),
+        ToggleComposer,
+    ));
+    if model
+        .capabilities
+        .has_backend(muxy_core::capability::Feature::Voice)
+    {
+        registry.register(action(
+            model,
+            ShortcutId::ToggleVoiceRecording,
+            tr_key!("Toggle Voice Recording"),
+            ToggleVoiceRecording,
+        ));
+    }
+}
+
+/// Commands that act on the focused terminal.
+fn register_terminal_commands(
+    registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
+    model: &AppModel,
+) {
+    use super::command_palette::action;
+
+    let no_terminal = model
+        .active_pane()
+        .and_then(|pane| model.terminal(&pane))
+        .is_none();
+    for command in [
+        action(model, ShortcutId::Find, tr_key!("Find…"), Find),
+        action(model, ShortcutId::FindNext, tr_key!("Find Next"), FindNext),
+        action(
+            model,
+            ShortcutId::FindPrevious,
+            tr_key!("Find Previous"),
+            FindPrevious,
+        ),
+        action(
+            model,
+            ShortcutId::PreviousPrompt,
+            tr_key!("Previous Prompt"),
+            PreviousPrompt,
+        ),
+        action(
+            model,
+            ShortcutId::NextPrompt,
+            tr_key!("Next Prompt"),
+            NextPrompt,
+        ),
+        action(
+            model,
+            ShortcutId::SelectCommandOutput,
+            tr_key!("Select Command Output"),
+            SelectCommandOutput,
+        ),
+        action(
+            model,
+            ShortcutId::ScrollToBottom,
+            tr_key!("Scroll to Bottom"),
+            ScrollToBottom,
+        ),
+        action(
+            model,
+            ShortcutId::IncreaseFontSize,
+            tr_key!("Increase Font Size"),
+            IncreaseFontSize,
+        ),
+        action(
+            model,
+            ShortcutId::DecreaseFontSize,
+            tr_key!("Decrease Font Size"),
+            DecreaseFontSize,
+        ),
+        action(
+            model,
+            ShortcutId::DetachTerminal,
+            tr_key!("Detach Terminal"),
+            DetachTerminal,
+        ),
+    ] {
+        registry.register(command.disabled(no_terminal));
+    }
+}
+
+fn register_pane_focus_commands(
+    registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
+    model: &AppModel,
+    unsplit: bool,
+) {
+    use super::command_palette::action;
+
+    for command in [
+        action(
+            model,
+            ShortcutId::FocusPaneLeft,
+            tr_key!("Focus Pane Left"),
+            FocusPaneLeft,
+        ),
+        action(
+            model,
+            ShortcutId::FocusPaneRight,
+            tr_key!("Focus Pane Right"),
+            FocusPaneRight,
+        ),
+        action(
+            model,
+            ShortcutId::FocusPaneUp,
+            tr_key!("Focus Pane Up"),
+            FocusPaneUp,
+        ),
+        action(
+            model,
+            ShortcutId::FocusPaneDown,
+            tr_key!("Focus Pane Down"),
+            FocusPaneDown,
+        ),
+    ] {
+        registry.register(command.disabled(unsplit));
+    }
+}
+
+/// Commands for the window and the app as a whole.
+fn register_app_commands(
+    registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
+    model: &AppModel,
+) {
+    use super::command_palette::{action, dispatch, titled};
+    use muxy_core::capability::Feature;
+    use muxy_ui::command_palette::Command;
+
+    for command in [
+        action(
+            model,
+            ShortcutId::ExistingTerminals,
+            tr_key!("Existing Terminals…"),
+            ExistingTerminals,
+        ),
+        action(
+            model,
+            ShortcutId::ToggleFullScreen,
+            tr_key!("Toggle Full Screen"),
+            ToggleFullScreen,
+        ),
+        action(
+            model,
+            ShortcutId::Minimize,
+            tr_key!("Minimize Window"),
+            Minimize,
+        ),
+        action(model, ShortcutId::Zoom, tr_key!("Zoom Window"), Zoom)
+            .keywords("Zoom Window Maximize Restore"),
+        titled(
+            model,
+            ShortcutId::Quit,
+            tr!("Quit %@", crate::app_name()),
+            Quit,
+        )
+        .keywords("Quit"),
+        action(
+            model,
+            ShortcutId::EndAllSessionsAndQuit,
+            tr_key!("End All Sessions and Quit"),
+            EndAllSessionsAndQuit,
+        ),
+    ] {
+        registry.register(command);
+    }
+    if model.capabilities.has_backend(Feature::Updates) {
+        registry.register(
+            Command::new(
+                "check_for_updates",
+                tr!("Check for Updates…"),
+                dispatch(CheckForUpdates),
+            )
+            .keywords("Check for Updates"),
+        );
+    }
+    if model.capabilities.has_backend(Feature::CommandLineTool) {
+        registry.register(action(
+            model,
+            ShortcutId::InstallCommandLineTool,
+            tr_key!("Install Command Line Tool…"),
+            InstallCommandLineTool,
+        ));
+    }
+}
+
 pub(crate) fn register_commands(
     registry: &mut muxy_ui::command_palette::Registry<super::command_palette::Handler>,
     model: &AppModel,
@@ -481,19 +681,8 @@ pub(crate) fn register_commands(
             .active_tab()
             .and_then(|tab| model.tab(tab))
             .is_none_or(|tab| tab.panes.len() < 2);
+    register_composer_commands(registry, model);
     for command in [
-        action(
-            model,
-            ShortcutId::ToggleComposer,
-            tr_key!("Toggle Composer"),
-            ToggleComposer,
-        ),
-        action(
-            model,
-            ShortcutId::ToggleVoiceRecording,
-            tr_key!("Toggle Voice Recording"),
-            ToggleVoiceRecording,
-        ),
         action(model, ShortcutId::NewTab, tr_key!("New Tab"), NewTab).disabled(missing),
         action(
             model,
@@ -577,6 +766,9 @@ pub(crate) fn register_commands(
     ] {
         registry.register(command);
     }
+    register_terminal_commands(registry, model);
+    register_pane_focus_commands(registry, model, unsplit);
+    register_app_commands(registry, model);
 }
 
 pub(crate) fn register_browser_commands(
@@ -659,7 +851,10 @@ impl AppModel {
                     && self.composer.view.is_none()
                     && self.webviews.panels.is_empty()))
         {
-            self.focus_active(window, cx);
+            match self.focus_return.take().and_then(|focus| focus.upgrade()) {
+                Some(focus) => focus.focus(window),
+                None => self.focus_active(window, cx),
+            }
             self.focus_requested = false;
         }
         if self.overlay.is_some() || self.close_prompt.is_some() {
@@ -739,7 +934,7 @@ impl Render for AppModel {
                             .flex_none()
                             .bg(theme.bg)
                             .child(if tab_focused || grouped {
-                                super::tab_sidebar::titlebar(self, sidebar_width, cx)
+                                super::tab_sidebar::titlebar(self, sidebar_width, window, cx)
                             } else {
                                 tab_strip::tab_strip(self, sidebar_width, window, cx)
                             })
@@ -757,20 +952,8 @@ impl Render for AppModel {
                         column.child(status_bar::status_bar(self, cx))
                     }),
             )
-            .child(
-                div()
-                    .absolute()
-                    .top(px(if sidebar_width >= titlebar::navigation_width(self) {
-                        0.0
-                    } else {
-                        33.0
-                    }))
-                    .bottom_0()
-                    .left(px(sidebar_width - 1.0))
-                    .w(px(1.0))
-                    .bg(theme.border),
-            )
-            .child(titlebar::navigation(self, sidebar_width, cx))
+            .child(sidebar_divider(self, sidebar_width, window))
+            .child(titlebar::navigation(self, sidebar_width, window, cx))
             .when(self.appearance.sidebar_expanded, |body| {
                 body.child(sidebar::resize_handle(self, cx))
             })
@@ -786,6 +969,23 @@ impl Render for AppModel {
             .child(self.apply_webview_regions(cx));
         crate::profiler::workspace(workspace)
     }
+}
+
+/// The line between the sidebar and the content. It starts below the
+/// navigation buttons where they reach past the sidebar.
+fn sidebar_divider(model: &AppModel, sidebar_width: f32, window: &Window) -> gpui::Div {
+    let top = if sidebar_width >= titlebar::navigation_width(model, window) {
+        0.0
+    } else {
+        33.0
+    };
+    div()
+        .absolute()
+        .top(px(top))
+        .bottom_0()
+        .left(px(sidebar_width - 1.0))
+        .w(px(1.0))
+        .bg(model.theme.border)
 }
 
 fn empty(model: &AppModel, cx: &mut Context<AppModel>) -> gpui::AnyElement {

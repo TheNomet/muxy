@@ -115,7 +115,10 @@ pub(crate) fn terminal(view: Entity<TerminalPane>, palette: &Palette) -> impl In
                     }
                 });
             });
-            view.update(cx, |pane, cx| pane.sync_cursor_blink(window, cx));
+            view.update(cx, |pane, cx| {
+                pane.scrollbar.place(bounds);
+                pane.sync_cursor_blink(window, cx);
+            });
             let mut painting = prepare(
                 view.read(cx),
                 frame.content.origin,
@@ -155,9 +158,17 @@ pub(crate) fn terminal(view: Entity<TerminalPane>, palette: &Palette) -> impl In
                     }
                 }
             });
-            (painting, frame, frame.backgrounds(view.read(cx), &palette))
+            let scrollbar = view
+                .read(cx)
+                .scrollbar_thumb(cx.background_executor().now());
+            (
+                painting,
+                frame,
+                frame.backgrounds(view.read(cx), &palette),
+                scrollbar,
+            )
         },
-        move |bounds, (painting, frame, padding), window, cx| {
+        move |bounds, (painting, frame, padding, scrollbar), window, cx| {
             let _span = crate::profiler::span(crate::profiler::Metric::TerminalPaint);
             let focus_border = mouse_view.read(cx).focus_border;
             let focus = mouse_view.read(cx).focus.clone();
@@ -204,6 +215,11 @@ pub(crate) fn terminal(view: Entity<TerminalPane>, palette: &Palette) -> impl In
                     super::ime::paint(&mouse_view, window, cx);
                 },
             );
+            if let Some(thumb) = scrollbar {
+                let mut color: Hsla = rgb(palette.foreground).into();
+                color.a = 0.4;
+                window.paint_quad(fill(thumb, color).corner_radii(thumb.size.width / 2.0));
+            }
             if let Some(color) = focus_border {
                 window.paint_quad(gpui::outline(bounds, color, gpui::BorderStyle::Solid));
             }
@@ -234,11 +250,15 @@ fn typography(
         terminal
             .font_families
             .first()
-            .cloned()
-            .unwrap_or_else(|| "Menlo".into()),
+            .map_or_else(|| "Menlo".into(), |family| muxy_ui::font::family(family)),
     );
     base_font.fallbacks = Some(gpui::FontFallbacks::from_fonts(
-        terminal.font_families.iter().skip(1).cloned().collect(),
+        terminal
+            .font_families
+            .iter()
+            .skip(1)
+            .map(|family| muxy_ui::font::family(family).into())
+            .collect(),
     ));
     base_font.features = FontFeatures(Arc::new(terminal.font.features.clone()));
     let sample = window.text_system().shape_line(

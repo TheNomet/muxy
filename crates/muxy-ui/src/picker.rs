@@ -1629,7 +1629,7 @@ impl Picker {
             .min_h(self.metrics.scaled(20.0))
             .px(self.metrics.spacing5())
             .text_size(self.metrics.font_caption())
-            .font_family("monospace")
+            .font_family(crate::font::monospace())
             .text_color(self.theme.fg)
             .child(line)
             .into_any_element()
@@ -2293,14 +2293,22 @@ mod gpui_regression_tests {
         ] {
             popover.update(cx, |popover, cx| popover.set_status(status, cx));
             cx.run_until_parked();
-            cx.simulate_keystrokes("down up enter alt-enter cmd-enter tab shift-tab");
+            cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+                "down up enter alt-enter cmd-enter tab shift-tab"
+            } else {
+                "down up enter alt-enter ctrl-shift-enter tab shift-tab"
+            });
             assert!(host.read_with(cx, |host, _| host.events.clone()).is_empty());
         }
         popover.update(cx, |popover, cx| {
             popover.set_status(PickerStatus::Empty("No results".into()), cx);
         });
         cx.run_until_parked();
-        cx.simulate_keystrokes("down up enter alt-enter cmd-enter tab shift-tab");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "down up enter alt-enter cmd-enter tab shift-tab"
+        } else {
+            "down up enter alt-enter ctrl-shift-enter tab shift-tab"
+        });
         assert_eq!(
             host.read_with(cx, |host, _| host.events.clone()),
             vec![

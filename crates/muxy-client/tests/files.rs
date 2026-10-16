@@ -1,6 +1,7 @@
 use muxy_client::Client;
 use muxy_server::{Registry, ServerSettings, connection};
 use std::error::Error;
+use std::net::Shutdown;
 use std::os::unix::{ffi::OsStrExt, net::UnixStream};
 use std::sync::{Arc, mpsc};
 
@@ -15,6 +16,7 @@ fn uploads_arrive_in_chunks_and_keep_their_name_on_the_server() -> TestResult {
             .with_uploads(directory.path().join("uploads")),
     );
     let (local, remote) = UnixStream::pair()?;
+    let sending = local.try_clone()?;
     let serving = std::thread::spawn(move || connection::serve(Box::new(remote), registry, events));
     let client = Client::from_stream(Box::new(local))?;
     let session =
@@ -39,7 +41,10 @@ fn uploads_arrive_in_chunks_and_keep_their_name_on_the_server() -> TestResult {
         Err(muxy_client::ClientError::Invalid(_))
     ));
     client.end_session(session.id)?;
-    drop(client);
+    // Closing only the sending side lets the server finish before its late
+    // catalog notifications can hit a closed socket.
+    sending.shutdown(Shutdown::Write)?;
     serving.join().map_err(|_| "server thread panicked")??;
+    drop(client);
     Ok(())
 }

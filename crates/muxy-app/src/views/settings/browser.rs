@@ -351,7 +351,7 @@ fn confirm(
 ) {
     let (sender, answer) = async_channel::bounded(1);
     let Ok(dialog) =
-        muxy_ui::dialog::confirm(window, title, message, label, None, move |response| {
+        muxy_ui::dialog::confirm(window, cx, title, message, label, None, move |response| {
             let _ = sender.try_send(matches!(
                 response,
                 muxy_ui::dialog::ConfirmationResponse::Confirmed { .. }

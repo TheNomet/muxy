@@ -4,10 +4,10 @@
 
 | Part | Runs on |
 | --- | --- |
-| Desktop app | macOS 14 or newer, on Apple Silicon or Intel |
+| Desktop app | macOS 14 or newer, on Apple Silicon or Intel; experimental Linux packages target Ubuntu 24.04 on x86_64 and ARM64 |
 | `muxy` CLI and server | macOS 14 or newer, or Linux with glibc 2.35 or newer, on x86_64 or ARM64. musl is unsupported. |
 
-## Desktop app
+## macOS desktop app
 
 Install with [Homebrew](https://brew.sh):
 
@@ -28,9 +28,15 @@ Line Tool…** from the app menu. It links `~/.local/bin/muxy`.
 The app updates itself, also when installed with Homebrew. Running terminals
 keep going through most updates.
 
+## Linux desktop app
+
+See [Linux desktop](linux.md) for system libraries, the user-local installer,
+stable and beta channels, in-app updates and removal. Linux desktop packages
+require glibc 2.39; standalone CLI/server packages retain the lower floor below.
+
 ## CLI and server only
 
-For Linux, or a Mac without the desktop app. This installs `muxy` and
+For a Linux computer or Mac without the desktop app. This installs `muxy` and
 `muxy-server`.
 
 ### Homebrew

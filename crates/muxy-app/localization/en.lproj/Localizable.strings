@@ -9,6 +9,7 @@
 "%@ CLI is not installed" = "%@ CLI is not installed";
 "%@ CLI is not installed. Choose another provider or install its CLI." = "%@ CLI is not installed. Choose another provider or install its CLI.";
 "%@ Could not restore the extension's enabled state: %@" = "%@ Could not restore the extension's enabled state: %@";
+"%@ Images are sent as inline file paths." = "%@ Images are sent as inline file paths.";
 "%@ Updates" = "%@ Updates";
 "%@ already exists; move it before installing Muxy." = "%@ already exists; move it before installing Muxy.";
 "%@ and %@, but %@" = "%@ and %@, but %@";
@@ -24,6 +25,7 @@
 "%@ is checked out in another worktree, so this one stays on its branch." = "%@ is checked out in another worktree, so this one stays on its branch.";
 "%@ is larger than 100 MiB, the most Muxy sends to %@." = "%@ is larger than 100 MiB, the most Muxy sends to %@.";
 "%@ is no longer available. Try again." = "%@ is no longer available. Try again.";
+"%@ is not installed, so there is nothing to open this with." = "%@ is not installed, so there is nothing to open this with.";
 "%@ is running" = "%@ is running";
 "%@ isn't connected." = "%@ isn't connected.";
 "%@ must be a regular file no larger than 16 MiB" = "%@ must be a regular file no larger than 16 MiB";
@@ -110,6 +112,7 @@
 "Add ~/.local/bin to your PATH. For this shell, run:\nexport PATH=\"$HOME/.local/bin:$PATH\"" = "Add ~/.local/bin to your PATH. For this shell, run:\nexport PATH=\"$HOME/.local/bin:$PATH\"";
 "Added %lld projects and %lld workspaces from Muxy 1.x. Projects, tabs, and workspaces you already had are unchanged." = "Added %lld projects and %lld workspaces from Muxy 1.x. Projects, tabs, and workspaces you already had are unchanged.";
 "Additional Prompt" = "Additional Prompt";
+"Additional instructions" = "Additional instructions";
 "Additional prompt" = "Additional prompt";
 "Adds %lld extensions from Muxy 1.x." = "Adds %lld extensions from Muxy 1.x.";
 "Adjust character spacing by pixels or a percentage, such as 10%%." = "Adjust character spacing by pixels or a percentage, such as 10%%.";
@@ -164,7 +167,9 @@
 "Auto · %@" = "Auto · %@";
 "Auto · None installed" = "Auto · None installed";
 "Automatic updates are available in installed releases of %@" = "Automatic updates are available in installed releases of %@";
+"Automatic updates are not available on this platform yet." = "Automatic updates are not available on this platform yet.";
 "Automatic updates require a Developer ID signed app" = "Automatic updates require a Developer ID signed app";
+"Automatic updates require a user-installed Linux desktop release" = "Automatic updates require a user-installed Linux desktop release";
 "Automatic updates require an installed %@.app" = "Automatic updates require an installed %@.app";
 "Automatic updates require an installed release of %@" = "Automatic updates require an installed release of %@";
 "Back" = "Back";
@@ -263,6 +268,8 @@
 "Choose a folder inside the home folder on the server." = "Choose a folder inside the home folder on the server.";
 "Choose a new branch name that isn't used yet" = "Choose a new branch name that isn't used yet";
 "Choose a private key" = "Choose a private key";
+"Choose a readable multilingual GGML voice model in Settings → Composer." = "Choose a readable multilingual GGML voice model in Settings → Composer.";
+"Choose a supported dictation language in Settings → Composer." = "Choose a supported dictation language in Settings → Composer.";
 "Choose a target branch that exists on the remote" = "Choose a target branch that exists on the remote";
 "Choose an existing folder, or use Create & Add Project." = "Choose an existing folder, or use Create & Add Project.";
 "Choose an extension folder containing package.json or a built dist folder" = "Choose an extension folder containing package.json or a built dist folder";
@@ -290,6 +297,7 @@
 "Click a shortcut to record it. Escape cancels. Conflicts in the same context must be resolved first." = "Click a shortcut to record it. Escape cancels. Conflicts in the same context must be resolved first.";
 "Clipboard changed during capture. Try again." = "Clipboard changed during capture. Try again.";
 "Clipboard changed during submission; sending stopped." = "Clipboard changed during submission; sending stopped.";
+"Clipboard image submission is not available on this platform yet." = "Clipboard image submission is not available on this platform yet.";
 "Clipboard is too large to preserve. Use inline image paths instead." = "Clipboard is too large to preserve. Use inline image paths instead.";
 "Clipboard paste" = "Clipboard paste";
 "Close" = "Close";
@@ -304,6 +312,7 @@
 "Close Tabs to the Left" = "Close Tabs to the Left";
 "Close Tabs to the Right" = "Close Tabs to the Right";
 "Close Tabs?" = "Close Tabs?";
+"Close Window" = "Close Window";
 "Close active terminal?" = "Close active terminal?";
 "Close pull request #%lld (%@) without merging?" = "Close pull request #%lld (%@) without merging?";
 "Close pull request?" = "Close pull request?";
@@ -408,6 +417,7 @@
 "Could not open a copy: %@" = "Could not open a copy: %@";
 "Could not open file: %@" = "Could not open file: %@";
 "Could not open link: %@" = "Could not open link: %@";
+"Could not open the file chooser: %@" = "Could not open the file chooser: %@";
 "Could not prepare the app update: %@" = "Could not prepare the app update: %@";
 "Could not prepare the update: %@. Check for updates to retry." = "Could not prepare the update: %@. Check for updates to retry.";
 "Could not preserve the clipboard" = "Could not preserve the clipboard";
@@ -417,6 +427,7 @@
 "Could not read this folder" = "Could not read this folder";
 "Could not reconnect to the updated server." = "Could not reconnect to the updated server.";
 "Could not refresh projects: %@" = "Could not refresh projects: %@";
+"Could not register Quick Terminal shortcut; it may already be in use: %@" = "Could not register Quick Terminal shortcut; it may already be in use: %@";
 "Could not register open terminals: %@" = "Could not register open terminals: %@";
 "Could not reload configuration: %@" = "Could not reload configuration: %@";
 "Could not replace clipboard contents" = "Could not replace clipboard contents";
@@ -504,12 +515,16 @@
 "Delete “%@”?" = "Delete “%@”?";
 "Delete “%@”? Its projects will not be removed." = "Delete “%@”? Its projects will not be removed.";
 "Deny & Remember" = "Deny & Remember";
+"Desktop notifications are not available on this platform yet." = "Desktop notifications are not available on this platform yet.";
+"Desktop notifications need Muxy to run from its app bundle." = "Desktop notifications need Muxy to run from its app bundle.";
+"Desktop notifications need the session's D-Bus: %@" = "Desktop notifications need the session's D-Bus: %@";
 "Detach" = "Detach";
 "Detach Terminal" = "Detach Terminal";
 "Detached %@" = "Detached %@";
 "Devices" = "Devices";
 "Dictation cancelled" = "Dictation cancelled";
 "Dictation delivery failed: %@" = "Dictation delivery failed: %@";
+"Dictation is already active. Finish or cancel it first." = "Dictation is already active. Finish or cancel it first.";
 "Dictation language" = "Dictation language";
 "Disable" = "Disable";
 "Disable built-in bindings" = "Disable built-in bindings";
@@ -575,11 +590,17 @@
 "Extend always" = "Extend always";
 "Extension %@ is not loaded" = "Extension %@ is not loaded";
 "Extension log writer is unavailable." = "Extension log writer is unavailable.";
+"Extension pages need WebKitGTK 4.1, which could not be loaded: %@" = "Extension pages need WebKitGTK 4.1, which could not be loaded: %@";
+"Extension pages need a desktop session to render in." = "Extension pages need a desktop session to render in.";
+"Extension scripts are not available on this platform yet." = "Extension scripts are not available on this platform yet.";
+"Extension scripts need WebKitGTK 4.1, which could not be loaded: %@" = "Extension scripts need WebKitGTK 4.1, which could not be loaded: %@";
 "Extension updated." = "Extension updated.";
+"Extension webviews are not available on this platform yet." = "Extension webviews are not available on this platform yet.";
 "Extensions" = "Extensions";
 "Extensions changed while reloading. Try again." = "Extensions changed while reloading. Try again.";
 "Fallback fonts" = "Fallback fonts";
 "File" = "File";
+"File manager" = "File manager";
 "Files" = "Files";
 "Fill padding with the background color, or extend the color of the nearest cells." = "Fill padding with the background color, or extend the color of the nearest cells.";
 "Filter layouts…" = "Filter layouts…";
@@ -593,6 +614,7 @@
 "Finding SSH key…" = "Finding SSH key…";
 "Find…" = "Find…";
 "Finish Dictation" = "Finish Dictation";
+"Finish recording to transcribe." = "Finish recording to transcribe.";
 "Finished working" = "Finished working";
 "Float Panel" = "Float Panel";
 "Focus Current Project" = "Focus Current Project";
@@ -620,6 +642,7 @@
 "Forget %@?" = "Forget %@?";
 "Forward" = "Forward";
 "General" = "General";
+"Global X11 shortcuts cannot cover a Wayland desktop." = "Global X11 shortcuts cannot cover a Wayland desktop.";
 "Global folder: %@" = "Global folder: %@";
 "Global template: %@" = "Global template: %@";
 "Green" = "Green";
@@ -632,6 +655,7 @@
 "Hide Tips" = "Hide Tips";
 "Hide Tips?" = "Hide Tips?";
 "Hides the panel" = "Hides the panel";
+"Hiding apps is not available on this platform." = "Hiding apps is not available on this platform.";
 "History & Bookmarks" = "History & Bookmarks";
 "History budget is too large" = "History budget is too large";
 "History budget per session (MiB)" = "History budget per session (MiB)";
@@ -672,6 +696,8 @@
 "Input" = "Input";
 "Insert" = "Insert";
 "Install" = "Install";
+"Install %@ and open it from there before installing its command line tool." = "Install %@ and open it from there before installing its command line tool.";
+"Install %@ to use offline dictation." = "Install %@ to use offline dictation.";
 "Install Command Line Tool…" = "Install Command Line Tool…";
 "Install Muxy %@ and restart the app? Running terminals will continue, and the server will update when all terminal sessions end. Restarting the server now ends all terminal sessions on this device, including sessions used by other clients." = "Install Muxy %@ and restart the app? Running terminals will continue, and the server will update when all terminal sessions end. Restarting the server now ends all terminal sessions on this device, including sessions used by other clients.";
 "Install Muxy…" = "Install Muxy…";
@@ -682,10 +708,14 @@
 "Install failed: %@" = "Install failed: %@";
 "Install muxy-server & Test Connection" = "Install muxy-server & Test Connection";
 "Install muxy-server on %@?" = "Install muxy-server on %@?";
+"Install the Silero speech detection model at %@ to use offline dictation." = "Install the Silero speech detection model at %@ to use offline dictation.";
+"Install whisper-cli 1.9.5 or later to use offline dictation." = "Install whisper-cli 1.9.5 or later to use offline dictation.";
+"Install whisper-cli and parec, then choose a multilingual GGML model file. Leave blank to use ggml-base.bin in your user data folder under muxy/voice. That folder must also contain ggml-silero-v6.2.0.bin for speech detection. Audio stays on this computer and is transcribed after you finish." = "Install whisper-cli and parec, then choose a multilingual GGML model file. Leave blank to use ggml-base.bin in your user data folder under muxy/voice. That folder must also contain ggml-silero-v6.2.0.bin for speech detection. Audio stays on this computer and is transcribed after you finish.";
 "Installed" = "Installed";
 "Installed %@.\n\n%@" = "Installed %@.\n\n%@";
 "Installing muxy-server, then testing connection…" = "Installing muxy-server, then testing connection…";
 "Installing the app update and restarting Muxy." = "Installing the app update and restarting Muxy.";
+"Installing the command line tool is not available on this platform yet." = "Installing the command line tool is not available on this platform yet.";
 "Installing…" = "Installing…";
 "Interface" = "Interface";
 "Invalid Mobile port" = "Invalid Mobile port";
@@ -701,6 +731,7 @@
 "Invalid recovery directory" = "Invalid recovery directory";
 "Invalid recovery entry" = "Invalid recovery entry";
 "Invalid restore path" = "Invalid restore path";
+"Invalid update checksum" = "Invalid update checksum";
 "Invalid update download size" = "Invalid update download size";
 "Invalid update version" = "Invalid update version";
 "It changed after you confirmed. Refresh and try again." = "It changed after you confirmed. Refresh and try again.";
@@ -713,6 +744,7 @@
 "Keyboard" = "Keyboard";
 "Keys the terminal handles while it is focused. They take precedence over app shortcuts." = "Keys the terminal handles while it is focused. They take precedence over app shortcuts.";
 "Language" = "Language";
+"Language packs and other resource-only extensions keep working." = "Language packs and other resource-only extensions keep working.";
 "Last seen %lld d ago" = "Last seen %lld d ago";
 "Last seen %lld h ago" = "Last seen %lld h ago";
 "Last seen %lld min ago" = "Last seen %lld min ago";
@@ -760,6 +792,7 @@
 "Manage scheduled update…" = "Manage scheduled update…";
 "Manage the local server that keeps your terminal sessions running." = "Manage the local server that keeps your terminal sessions running.";
 "Manual Order" = "Manual Order";
+"Maximize" = "Maximize";
 "Maximize Pane" = "Maximize Pane";
 "Merge" = "Merge";
 "Merge %@ into %@ and push the updated branch?" = "Merge %@ into %@ and push the updated branch?";
@@ -772,10 +805,13 @@
 "Merged, but couldn't remove the worktree" = "Merged, but couldn't remove the worktree";
 "Merging PR #%lld" = "Merging PR #%lld";
 "Microphone access is disabled. Enable Muxy in System Settings → Privacy & Security → Microphone." = "Microphone access is disabled. Enable Muxy in System Settings → Privacy & Security → Microphone.";
+"Microphone capture stopped. Check the default input device and its PulseAudio or PipeWire permissions." = "Microphone capture stopped. Check the default input device and its PulseAudio or PipeWire permissions.";
 "Microphone recording stopped. Try again." = "Microphone recording stopped. Try again.";
 "Migration" = "Migration";
 "Minimize" = "Minimize";
+"Minimize Window" = "Minimize Window";
 "Missing application directory" = "Missing application directory";
+"Missing desktop update checksum" = "Missing desktop update checksum";
 "Missing installation directory" = "Missing installation directory";
 "Missing update directory" = "Missing update directory";
 "Missing update size" = "Missing update size";
@@ -800,6 +836,7 @@
 "Muxy Settings" = "Muxy Settings";
 "Muxy Update" = "Muxy Update";
 "Muxy can open copies only of files in %@'s projects and Home." = "Muxy can open copies only of files in %@'s projects and Home.";
+"Muxy is already running but did not answer: %@" = "Muxy is already running but did not answer: %@";
 "Muxy is quitting" = "Muxy is quitting";
 "Muxy on %@ can't receive files. Update Muxy there." = "Muxy on %@ can't receive files. Update Muxy there.";
 "Muxy on %@ is %@" = "Muxy on %@ is %@";
@@ -857,6 +894,7 @@
 "No matching languages" = "No matching languages";
 "No matching terminals" = "No matching terminals";
 "No microphone is available" = "No microphone is available";
+"No notification service is running on this desktop." = "No notification service is running on this desktop.";
 "No on-device speech language is installed. Add one in System Settings → Keyboard → Dictation." = "No on-device speech language is installed. Add one in System Settings → Keyboard → Dictation.";
 "No opener supports this resource" = "No opener supports this resource";
 "No other browsers were found on this computer." = "No other browsers were found on this computer.";
@@ -883,8 +921,13 @@
 "Not listening: %@" = "Not listening: %@";
 "Notes about imported terminal settings. Your original configuration is preserved." = "Notes about imported terminal settings. Your original configuration is preserved.";
 "Nothing is staged. Stage changes first or include unstaged changes." = "Nothing is staged. Stage changes first or include unstaged changes.";
+"Notifications are turned off for Muxy in System Settings." = "Notifications are turned off for Muxy in System Settings.";
 "OK" = "OK";
 "Off" = "Off";
+"Offline transcription failed. Check whisper-cli, the voice model and the Silero speech detection model." = "Offline transcription failed. Check whisper-cli, the voice model and the Silero speech detection model.";
+"Offline transcription returned invalid text." = "Offline transcription returned invalid text.";
+"Offline transcription timed out. Try a smaller model or a shorter recording." = "Offline transcription timed out. Try a smaller model or a shorter recording.";
+"Offline voice model" = "Offline voice model";
 "On" = "On";
 "On-device speech recognition is unavailable for this language. Choose another dictation language." = "On-device speech recognition is unavailable for this language. Choose another dictation language.";
 "Open" = "Open";
@@ -924,6 +967,7 @@
 "PAUSED" = "PAUSED";
 "PR #%lld" = "PR #%lld";
 "PRIMARY" = "PRIMARY";
+"PROCESSING" = "PROCESSING";
 "Padding color" = "Padding color";
 "Pair a phone" = "Pair a phone";
 "Paired devices" = "Paired devices";
@@ -935,9 +979,11 @@
 "Paste" = "Paste";
 "Paste image contents into compatible terminal apps or insert the saved image path." = "Paste image contents into compatible terminal apps or insert the saved image path.";
 "Path template is required." = "Path template is required.";
+"Path to a local multilingual Whisper model. Used by Linux dictation." = "Path to a local multilingual Whisper model. Used by Linux dictation.";
 "Pause" = "Pause";
 "Pause Dictation" = "Pause Dictation";
 "Pending import must use the current backup format" = "Pending import must use the current backup format";
+"Pending update belongs to another installation" = "Pending update belongs to another installation";
 "Pending update is outside the installation directory" = "Pending update is outside the installation directory";
 "Pending update version mismatch" = "Pending update version mismatch";
 "Per-machine" = "Per-machine";
@@ -982,10 +1028,10 @@
 "Query is too long" = "Query is too long";
 "Quick Terminal" = "Quick Terminal";
 "Quick Terminal panel unavailable" = "Quick Terminal panel unavailable";
-"Quick Terminal panels are unavailable on this platform" = "Quick Terminal panels are unavailable on this platform";
+"Quick Terminal requires an X11 desktop session. Wayland dropdown placement, hiding and activation are not supported by the window backend yet." = "Quick Terminal requires an X11 desktop session. Wayland dropdown placement, hiding and activation are not supported by the window backend yet.";
+"Quick Terminal requires an X11 display." = "Quick Terminal requires an X11 display.";
 "Quick Terminal shortcut" = "Quick Terminal shortcut";
 "Quick Terminal shortcut conflicts with %@" = "Quick Terminal shortcut conflicts with %@";
-"Quick Terminal shortcut recording is unavailable on this platform" = "Quick Terminal shortcut recording is unavailable on this platform";
 "Quick Terminal status" = "Quick Terminal status";
 "Quit %@" = "Quit %@";
 "Quitting Muxy never ends your terminals. To keep them when closing tabs or panes too, set Settings → General → Closing terminals → When closing tabs or panes to Detach." = "Quitting Muxy never ends your terminals. To keep them when closing tabs or panes too, set Settings → General → Closing terminals → When closing tabs or panes to Detach.";
@@ -1067,6 +1113,7 @@
 "Restarting…" = "Restarting…";
 "Restore Default" = "Restore Default";
 "Restore Pane" = "Restore Pane";
+"Restore Window" = "Restore Window";
 "Restore backup" = "Restore backup";
 "Restore on next launch" = "Restore on next launch";
 "Restore settings and %lld saved projects with their layouts on the next launch. Existing projects are kept; matching projects receive the saved layouts. A recovery copy is saved in the profile’s Backups folder. Restart the server from Settings to apply restored server settings." = "Restore settings and %lld saved projects with their layouts on the next launch. Existing projects are kept; matching projects receive the saved layouts. A recovery copy is saved in the profile’s Backups folder. Restart the server from Settings to apply restored server settings.";
@@ -1107,6 +1154,7 @@
 "Scan with the Muxy app. The code works once and expires in 5 minutes." = "Scan with the Muxy app. The code works once and expires in 5 minutes.";
 "Scroll page down" = "Scroll page down";
 "Scroll page up" = "Scroll page up";
+"Scroll to Bottom" = "Scroll to Bottom";
 "Scroll to bottom" = "Scroll to bottom";
 "Scroll to bottom on output" = "Scroll to bottom on output";
 "Scroll to bottom when typing" = "Scroll to bottom when typing";
@@ -1177,6 +1225,7 @@
 "Shortcut" = "Shortcut";
 "Shortcut conflicts with Quick Terminal" = "Shortcut conflicts with Quick Terminal";
 "Shortcuts" = "Shortcuts";
+"Show" = "Show";
 "Show All" = "Show All";
 "Show All Projects" = "Show All Projects";
 "Show Muxy Tip" = "Show Muxy Tip";
@@ -1188,6 +1237,7 @@
 "Show all" = "Show all";
 "Show an enabled extension's sidebar in place of the built-in one." = "Show an enabled extension's sidebar in place of the built-in one.";
 "Show connection and terminal information at the bottom of the workspace." = "Show connection and terminal information at the bottom of the workspace.";
+"Show in File Manager" = "Show in File Manager";
 "Show project icons or hide the sidebar in Project Focused. Tab Focused and Agents Focused always hide it when collapsed." = "Show project icons or hide the sidebar in Project Focused. Tab Focused and Agents Focused always hide it when collapsed.";
 "Show project names alongside their icons in the workspace sidebar." = "Show project names alongside their icons in the workspace sidebar.";
 "Show status bar" = "Show status bar";
@@ -1251,9 +1301,11 @@
 "Text color" = "Text color";
 "Text to send. Write special keys as escapes, such as \\e for Escape or \\x01 for Control-A." = "Text to send. Write special keys as escapes, such as \\e for Escape or \\x01 for Control-A.";
 "That browser is no longer available" = "That browser is no longer available";
+"The 10-minute recording limit was reached. Finish to transcribe, or cancel." = "The 10-minute recording limit was reached. Finish to transcribe, or cancel.";
 "The AI provider returned an empty commit message" = "The AI provider returned an empty commit message";
 "The AI provider returned an empty pull request title" = "The AI provider returned an empty pull request title";
 "The AI provider returned an invalid response. Update the prompt or try another provider." = "The AI provider returned an invalid response. Update the prompt or try another provider.";
+"The Quick Terminal is not available on this platform yet." = "The Quick Terminal is not available on this platform yet.";
 "The Quick Terminal shortcut listener and shell are off. Your shortcut, size, and appearance settings are preserved." = "The Quick Terminal shortcut listener and shell are off. Your shortcut, size, and appearance settings are preserved.";
 "The app is updated. The server will update when all terminal sessions end, or you can restart it now. Restarting ends all sessions, including idle and detached sessions." = "The app is updated. The server will update when all terminal sessions end, or you can restart it now. Restarting ends all sessions, including idle and detached sessions.";
 "The audio input changed. Finish or cancel dictation, then try again." = "The audio input changed. Finish or cancel dictation, then try again.";
@@ -1263,6 +1315,7 @@
 "The bundled client and server do not match the release" = "The bundled client and server do not match the release";
 "The command path changed during installation; try again." = "The command path changed during installation; try again.";
 "The default profile can't be deleted" = "The default profile can't be deleted";
+"The desktop refused a notification: %@" = "The desktop refused a notification: %@";
 "The development build at %@ is uploaded to %@. It installs muxy-server and its muxy helper in ~/.local/bin, then tests the connection. It requires x86_64 Linux with glibc 2.35 or newer." = "The development build at %@ is uploaded to %@. It installs muxy-server and its muxy helper in ~/.local/bin, then tests the connection. It requires x86_64 Linux with glibc 2.35 or newer.";
 "The device disconnects now and must be paired again to reconnect." = "The device disconnects now and must be paired again to reconnect.";
 "The extension changed. Check for updates and try again." = "The extension changed. Check for updates and try again.";
@@ -1270,14 +1323,19 @@
 "The extension kept an open view. Save or close it before reloading." = "The extension kept an open view. Save or close it before reloading.";
 "The extension view could not be closed. Try reloading again." = "The extension view could not be closed. Try reloading again.";
 "The extension was updated but could not be enabled: %@" = "The extension was updated but could not be enabled: %@";
+"The extension's page could not be loaded." = "The extension's page could not be loaded.";
 "The folder operation was cancelled." = "The folder operation was cancelled.";
 "The image is empty." = "The image is empty.";
 "The installed app changed. Reopen Muxy to update the server." = "The installed app changed. Reopen Muxy to update the server.";
 "The installed app changed. Reopen it before installing the command line tool." = "The installed app changed. Reopen it before installing the command line tool.";
+"The installed app changed. Reopen it before updating." = "The installed app changed. Reopen it before updating.";
 "The installed app has no valid developer signature" = "The installed app has no valid developer signature";
 "The installed app includes a server update. Restarting the server ends all terminal sessions." = "The installed app includes a server update. Restarting the server ends all terminal sessions.";
 "The installed extension could not be loaded. Reload extensions to try again." = "The installed extension could not be loaded. Reload extensions to try again.";
+"The installed or staged update changed. Check for updates again." = "The installed or staged update changed. Check for updates again.";
+"The local audio service is unavailable. Start dictation from a desktop session." = "The local audio service is unavailable. Start dictation from a desktop session.";
 "The microphone could not start recording" = "The microphone could not start recording";
+"The offline transcript was too large." = "The offline transcript was too large.";
 "The page new browser tabs open to. Leave it empty for the start page." = "The page new browser tabs open to. Leave it empty for the start page.";
 "The pairing code is too long to show." = "The pairing code is too long to show.";
 "The project directory isn't available on this Mac" = "The project directory isn't available on this Mac";
@@ -1295,6 +1353,7 @@
 "The server took too long to check or create the folder." = "The server took too long to check or create the folder.";
 "The server update could not finish." = "The server update could not finish.";
 "The server version does not match the signed app" = "The server version does not match the signed app";
+"The shortcut key is not available in the current keyboard layout." = "The shortcut key is not available in the current keyboard layout.";
 "The signed app has an unexpected %@" = "The signed app has an unexpected %@";
 "The signed beta build number does not match the update feed" = "The signed beta build number does not match the update feed";
 "The staged update metadata changed. Check for updates again." = "The staged update metadata changed. Check for updates again.";
@@ -1302,6 +1361,7 @@
 "The typeface used to render text in every terminal pane." = "The typeface used to render text in every terminal pane.";
 "The update download is incomplete or has an unexpected size" = "The update download is incomplete or has an unexpected size";
 "The updater is starting. Try again shortly." = "The updater is starting. Try again shortly.";
+"The user data folder is unavailable. Set XDG_DATA_HOME or HOME to use offline dictation." = "The user data folder is unavailable. Set XDG_DATA_HOME or HOME to use offline dictation.";
 "The working tree is clean" = "The working tree is clean";
 "The working tree is clean." = "The working tree is clean.";
 "Theme %@ needs valid background and foreground colors" = "Theme %@ needs valid background and foreground colors";
@@ -1316,6 +1376,7 @@
 "This Mac" = "This Mac";
 "This backup format is not supported by this version of Muxy" = "This backup format is not supported by this version of Muxy";
 "This branch already has a pull request" = "This branch already has a pull request";
+"This desktop has no file chooser service. Install xdg-desktop-portal and its backend for your desktop." = "This desktop has no file chooser service. Install xdg-desktop-portal and its backend for your desktop.";
 "This extension is up to date." = "This extension is up to date.";
 "This is not a released version" = "This is not a released version";
 "This language is unavailable for speech recognition" = "This language is unavailable for speech recognition";
@@ -1336,6 +1397,7 @@
 "Toggle Voice Recording" = "Toggle Voice Recording";
 "Top" = "Top";
 "Trackpad scroll speed" = "Trackpad scroll speed";
+"Transcribing on this computer…" = "Transcribing on this computer…";
 "Transparency of the terminal background." = "Transparency of the terminal background.";
 "Trust & Test" = "Trust & Test";
 "Try Again" = "Try Again";
@@ -1386,6 +1448,7 @@
 "Update and End Sessions…" = "Update and End Sessions…";
 "Update and Restart App" = "Update and Restart App";
 "Update and restart app…" = "Update and restart app…";
+"Update download checksum mismatch" = "Update download checksum mismatch";
 "Update feed is too large" = "Update feed is too large";
 "Update from %@" = "Update from %@";
 "Update pull request branch?" = "Update pull request branch?";
@@ -1401,6 +1464,7 @@
 "Updating…" = "Updating…";
 "Use Command, Control, or Option with a supported key" = "Use Command, Control, or Option with a supported key";
 "Use Composer Panel" = "Use Composer Panel";
+"Use Control or Alt with a supported key." = "Use Control or Alt with a supported key.";
 "Use Default" = "Use Default";
 "Use Floating Composer" = "Use Floating Composer";
 "Use Global Prompt" = "Use Global Prompt";
@@ -1425,12 +1489,14 @@
 "View" = "View";
 "Violet" = "Violet";
 "Voice" = "Voice";
+"Voice input is not available on this platform yet." = "Voice input is not available on this platform yet.";
 "Wait for the AI repository action to finish" = "Wait for the AI repository action to finish";
 "Wait for the current AI action to finish" = "Wait for the current AI action to finish";
 "Wait for the current Git action to finish" = "Wait for the current Git action to finish";
 "Wait for the current mobile access change to finish" = "Wait for the current mobile access change to finish";
 "Wait for the running Git action to finish." = "Wait for the running Git action to finish.";
 "Wait for the server settings operation to finish before quitting" = "Wait for the server settings operation to finish before quitting";
+"Web Inspector" = "Web Inspector";
 "Web content process terminated" = "Web content process terminated";
 "When closing tabs or panes" = "When closing tabs or panes";
 "Whether phones can reach this device right now." = "Whether phones can reach this device right now.";
@@ -1451,10 +1517,12 @@
 "Worktrees go in <folder>/<project>/<name>. Leave both location settings empty to use ~/.muxy/worktrees." = "Worktrees go in <folder>/<project>/<name>. Leave both location settings empty to use ~/.muxy/worktrees.";
 "Writing PR" = "Writing PR";
 "Writing message" = "Writing message";
+"X11 returned an empty keyboard map." = "X11 returned an empty keyboard map.";
 "Yellow" = "Yellow";
 "You can show tips again in Settings → Appearance → Interface by turning on Show tips." = "You can show tips again in Settings → Appearance → Interface by turning on Show tips.";
 "You’re running the latest version of %@." = "You’re running the latest version of %@.";
 "Zoom" = "Zoom";
+"Zoom Window" = "Zoom Window";
 "add project" = "add project";
 "allow" = "allow";
 "archive checksum does not match the marketplace" = "archive checksum does not match the marketplace";

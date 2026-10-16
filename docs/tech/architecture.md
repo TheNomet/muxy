@@ -172,3 +172,8 @@ flowchart LR
 - Otherwise the update waits for every terminal to end, or ends them after the
   user confirms.
 - The old app bundle is kept until its server exits.
+- Linux user installs switch one symlink between complete version directories.
+  Runtime leases keep old helpers available while apps, CLIs or servers use
+  them; one previous version is also retained for rollback. Download checksums,
+  package manifests and all three executable build identities are verified
+  before activation. Package-manager paths are never replaced by this updater.

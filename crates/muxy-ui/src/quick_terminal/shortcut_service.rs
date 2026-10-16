@@ -20,7 +20,17 @@ pub trait ShortcutBackend {
 
 pub trait ShortcutBackendFactory {
     fn create(&mut self, shortcut: &QuickTerminalShortcut) -> Option<Box<dyn ShortcutBackend>>;
+
+    fn same_registration(
+        &self,
+        left: &QuickTerminalShortcut,
+        right: &QuickTerminalShortcut,
+    ) -> bool {
+        same_registration(left, right)
+    }
 }
+
+pub type ShortcutCanonicalizer = dyn FnMut(&QuickTerminalShortcut) -> Option<QuickTerminalShortcut>;
 
 pub type ShortcutPersistence = dyn FnMut(&QuickTerminalShortcut) -> std::io::Result<()>;
 
@@ -61,7 +71,7 @@ pub struct QuickTerminalShortcutService {
     trigger_receiver: Receiver<()>,
     factory: Box<dyn ShortcutBackendFactory>,
     persist: Box<ShortcutPersistence>,
-    key_resolver: Box<dyn FnMut(u16) -> Option<String>>,
+    canonicalizer: Box<ShortcutCanonicalizer>,
 }
 
 impl QuickTerminalShortcutService {
@@ -70,9 +80,9 @@ impl QuickTerminalShortcutService {
         enabled: bool,
         factory: Box<dyn ShortcutBackendFactory>,
         persist: Box<ShortcutPersistence>,
-        key_resolver: Box<dyn FnMut(u16) -> Option<String>>,
+        canonicalizer: Box<ShortcutCanonicalizer>,
     ) -> Self {
-        let (trigger_sender, trigger_receiver) = async_channel::unbounded();
+        let (trigger_sender, trigger_receiver) = async_channel::bounded(1);
         Self {
             shortcut,
             enabled,
@@ -87,7 +97,7 @@ impl QuickTerminalShortcutService {
             trigger_receiver,
             factory,
             persist,
-            key_resolver,
+            canonicalizer,
         }
     }
 
@@ -159,9 +169,12 @@ impl QuickTerminalShortcutService {
         let Some(shortcut) = self.canonicalize(&shortcut) else {
             return self.fail(ShortcutServiceError::InvalidShortcut);
         };
-        if let Some(conflict) = shortcut.find_conflict(conflicts, |code| (self.key_resolver)(code))
-        {
-            return self.fail(ShortcutServiceError::Conflict(conflict.label));
+        if let Some(conflict) = shortcut.key_combo().and_then(|combo| {
+            conflicts
+                .iter()
+                .find(|candidate| combo.conflicts_with(&candidate.combo))
+        }) {
+            return self.fail(ShortcutServiceError::Conflict(conflict.label.clone()));
         }
         let persist = shortcut != self.shortcut;
         if !self.started {
@@ -188,7 +201,9 @@ impl QuickTerminalShortcutService {
             });
         }
         if self.active_backend.is_some()
-            && (shortcut == self.shortcut || same_registration(&shortcut, &self.shortcut))
+            && self.state() == ShortcutState::Registered
+            && (shortcut == self.shortcut
+                || self.factory.same_registration(&shortcut, &self.shortcut))
         {
             return Ok(PreparedShortcutUpdate {
                 shortcut,
@@ -233,6 +248,7 @@ impl QuickTerminalShortcutService {
                 generation,
             } => {
                 self.active_generation.set(generation);
+                while self.trigger_receiver.try_recv().is_ok() {}
                 self.state = backend
                     .as_ref()
                     .map_or(ShortcutState::Stopped, |backend| backend.state());
@@ -279,7 +295,9 @@ impl QuickTerminalShortcutService {
     }
 
     pub fn state(&self) -> ShortcutState {
-        self.state
+        self.active_backend
+            .as_ref()
+            .map_or(self.state, |backend| backend.state())
     }
 
     pub fn error_message(&self) -> Option<&str> {
@@ -299,7 +317,7 @@ impl QuickTerminalShortcutService {
     }
 
     fn canonicalize(&mut self, shortcut: &QuickTerminalShortcut) -> Option<QuickTerminalShortcut> {
-        shortcut.canonicalized(|code| (self.key_resolver)(code))
+        (self.canonicalizer)(shortcut)
     }
 
     fn next_generation(&mut self) -> u64 {
@@ -322,6 +340,7 @@ impl QuickTerminalShortcutService {
 
     fn stop_active_backend(&mut self) {
         self.active_generation.set(None);
+        while self.trigger_receiver.try_recv().is_ok() {}
         if let Some(mut backend) = self.active_backend.take() {
             backend.stop();
         }
@@ -488,10 +507,12 @@ mod tests {
                 backends: backends.into(),
             }),
             Box::new(persist),
-            Box::new(|code| match code {
-                0 => Some("a".to_owned()),
-                49 => Some("space".to_owned()),
-                _ => None,
+            Box::new(|shortcut| {
+                shortcut.canonicalized(|code| match code {
+                    0 => Some("a".to_owned()),
+                    49 => Some("space".to_owned()),
+                    _ => None,
+                })
             }),
         )
     }
@@ -534,5 +555,70 @@ mod tests {
         assert_eq!(second_record.borrow().stops, 1);
         assert_eq!(service.shortcut(), &other_key_combo());
         assert_eq!(service.state(), ShortcutState::Registered);
+    }
+
+    #[test]
+    fn stopping_and_replacing_discard_queued_and_late_triggers() {
+        let (first, first_record) = backend(None);
+        let (second, second_record) = backend(None);
+        let mut service = service(other_key_combo(), true, vec![first, second], |_| Ok(()));
+        service.start().unwrap();
+        let old_trigger = first_record.borrow().trigger.clone().unwrap();
+        old_trigger();
+        service.update_shortcut(key_combo(), &[]).unwrap();
+        old_trigger();
+        assert!(!service.try_receive_trigger());
+        let new_trigger = second_record.borrow().trigger.clone().unwrap();
+        new_trigger();
+        assert!(service.try_receive_trigger());
+        new_trigger();
+        service.stop();
+        new_trigger();
+        assert!(!service.try_receive_trigger());
+        assert_eq!(first_record.borrow().stops, 1);
+        assert_eq!(second_record.borrow().stops, 1);
+    }
+
+    #[test]
+    fn failed_save_cancels_prepared_triggers_and_keeps_the_original_live() {
+        let (first, first_record) = backend(None);
+        let (second, second_record) = backend(None);
+        let mut service = service(other_key_combo(), true, vec![first, second], |_| Ok(()));
+        service.start().unwrap();
+        let prepared = service.prepare_shortcut(key_combo(), &[]).unwrap();
+        let candidate = second_record.borrow().trigger.clone().unwrap();
+        candidate();
+        assert!(!service.try_receive_trigger());
+        service.cancel_prepared(prepared);
+        candidate();
+        assert!(!service.try_receive_trigger());
+        first_record.borrow().trigger.as_ref().unwrap()();
+        assert!(service.try_receive_trigger());
+    }
+
+    #[test]
+    fn recording_suspends_and_resumes_without_persisting_or_replaying_a_press() {
+        let (first, first_record) = backend(None);
+        let (second, second_record) = backend(None);
+        let saves = Rc::new(Cell::new(0));
+        let persisted = saves.clone();
+        let mut service = service(other_key_combo(), true, vec![first, second], move |_| {
+            persisted.set(persisted.get() + 1);
+            Ok(())
+        });
+        service.start().unwrap();
+        let trigger = first_record.borrow().trigger.clone().unwrap();
+        trigger();
+        service.stop();
+        trigger();
+        assert_eq!(service.state(), ShortcutState::Stopped);
+        assert!(!service.try_receive_trigger());
+        service.start().unwrap();
+        assert_eq!(service.shortcut(), &other_key_combo());
+        assert_eq!(saves.get(), 0);
+        trigger();
+        assert!(!service.try_receive_trigger());
+        second_record.borrow().trigger.as_ref().unwrap()();
+        assert!(service.try_receive_trigger());
     }
 }

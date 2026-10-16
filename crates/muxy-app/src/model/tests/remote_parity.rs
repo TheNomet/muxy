@@ -174,7 +174,7 @@ fn uploads(cx: &mut TestAppContext) -> Result {
         cx.write_to_clipboard(gpui::ClipboardItem::new_image(&image));
     });
     terminal.update(cx, TerminalPane::paste_clipboard);
-    wait_text(cx, &view, "/pasted-image.png'")?;
+    wait_wrapped_text(cx, &view, "/pasted-image.png'")?;
     assert!(
         machine
             .uploads()
@@ -216,7 +216,13 @@ fn composer(cx: &mut TestAppContext) -> Result {
             .is_some_and(|view| !view.read(cx).draft.image_attachments.is_empty())
     })?;
     composer.update(cx, |_, cx| cx.emit(ComposerEvent::Submit(false)));
-    wait_text(cx, &view, "/pasted-image.png'")?;
+    wait(cx, &view, |_, _| !machine.uploads().is_empty())?;
+    let uploaded = machine.uploads();
+    let filename = uploaded
+        .first()
+        .map(|(name, _)| name)
+        .ok_or("missing uploaded image")?;
+    wait_wrapped_text(cx, &view, &format!("/{filename}'"))?;
     assert_eq!(machine.uploads().len(), 1);
     let here = tempfile::tempdir()?;
     let huge = here.path().join("huge.bin");
@@ -411,4 +417,19 @@ fn remotes_stopped_by_the_user_or_needing_a_password_wait_for_connect(cx: &mut T
         0,
         "a password login waits until the user connects and types it"
     );
+}
+
+fn wait_wrapped_text(
+    cx: &mut VisualTestContext,
+    view: &Entity<AppModel>,
+    expected: &str,
+) -> Result {
+    wait(cx, view, |model, cx| {
+        active_grid(model, cx).is_some_and(|grid| {
+            (0..grid.rows.len())
+                .map(|row| grid.row_text(row))
+                .collect::<String>()
+                .contains(expected)
+        })
+    })
 }

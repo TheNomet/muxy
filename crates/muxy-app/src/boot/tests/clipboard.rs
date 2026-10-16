@@ -15,7 +15,10 @@ fn clipboard_notifications_stay_coalesced_through_worker_and_ui_queues() -> Test
     assert!(matches!(updates.recv_blocking()?.2, Update::Connected(_)));
     let (reply, client) = async_channel::bounded(1);
     work.send((1, Work::ExtensionClient(reply)))?;
-    let client = client.recv_blocking()?.ok_or("missing client")?;
+    let client = client
+        .recv_blocking()?
+        .ok_or("missing client")?
+        .with_timeout(Duration::from_secs(30));
 
     client.ping()?;
     let Update::Event(event @ ClientEvent::ClipboardWrite { .. }) = updates.recv_blocking()?.2

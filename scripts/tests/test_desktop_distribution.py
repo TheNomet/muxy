@@ -1,0 +1,275 @@
+from concurrent.futures import ThreadPoolExecutor
+import fcntl
+import gzip
+import hashlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import tarfile
+import tempfile
+import threading
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def module(name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / (name + ".py"))
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
+INSTALL = module("install-desktop-linux")
+AUDIT = module("audit-linux")
+RELEASE = module("release")
+
+
+class DesktopDistributionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.home = Path(self.temp.name)
+        self.root = self.home / "desktop with spaces"
+        self.root.mkdir(mode=0o700)
+        (self.root / "versions").mkdir(mode=0o700)
+        INSTALL.atomic_json(self.root / "installation.json", {"schema": 1, "channel": "beta"})
+        self.old = "2.0.0-beta.10"
+        self.new = "2.0.0-beta.11"
+        home = patch.object(Path, "home", return_value=self.home)
+        home.start()
+        self.addCleanup(home.stop)
+        environment = patch.dict(os.environ, {"XDG_DATA_HOME": str(self.home / "data")})
+        environment.start()
+        self.addCleanup(environment.stop)
+        architecture = patch.object(INSTALL, "architecture", return_value="arm64")
+        architecture.start()
+        self.addCleanup(architecture.stop)
+
+    def package(self, version, **options):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            build = {"version": version, "compatibility": 1, "protocol": [1]}
+            files = {}
+            for name in INSTALL.FILES - {"manifest.json"}:
+                path = directory / name
+                value = ("#!/bin/sh\nprintf '%s\\n' '" + json.dumps(build) + "'\n").encode() if name in INSTALL.BINARIES else b"asset"
+                path.write_bytes(value)
+                path.chmod(0o755 if name in INSTALL.BINARIES else 0o644)
+                files[name] = {"size": len(value), "sha256": hashlib.sha256(value).hexdigest()}
+            manifest = {"schema": 1, "version": version, "channel": "beta", "arch": INSTALL.architecture(),
+                        "build": build, "files": files, **options}
+            (directory / "manifest.json").write_text(json.dumps(manifest))
+            archive = self.home / f"{version}.tar.gz"
+            with tarfile.open(archive, "w:gz") as output:
+                for path in directory.iterdir():
+                    output.add(path, arcname=f"muxy-desktop/{path.name}")
+        return archive, INSTALL.digest(archive)
+
+    def staged(self, version):
+        archive, checksum = self.package(version)
+        INSTALL.stage(self.root, archive, version, checksum)
+        return self.root / "versions" / version
+
+    def test_checksum_failure_leaves_current_binaries_untouched(self):
+        self.staged(self.old)
+        INSTALL.switch(self.root, self.old)
+        archive, _ = self.package(self.new)
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            INSTALL.stage(self.root, archive, self.new, "0" * 64)
+        self.assertEqual(INSTALL.current_version(self.root), self.old)
+        self.assertFalse((self.root / "versions" / self.new).exists())
+
+    def test_tar_rejects_traversal_links_duplicate_files_and_oversized_entries(self):
+        for name, kind, size in (("../escaped", tarfile.REGTYPE, 1),
+                                 ("muxy-desktop/muxy", tarfile.SYMTYPE, 0),
+                                 ("muxy-desktop/muxy", tarfile.LNKTYPE, 0),
+                                 ("muxy-desktop/muxy", tarfile.FIFOTYPE, 0),
+                                 ("muxy-desktop/muxy", tarfile.REGTYPE, INSTALL.MAX_ARCHIVE + 1)):
+            with self.subTest(name=name, kind=kind, size=size):
+                archive = self.home / "bad.tar.gz"
+                with gzip.open(archive, "wb") as output:
+                    entry = tarfile.TarInfo(name)
+                    entry.type, entry.size, entry.linkname = kind, size, "/tmp/escaped"
+                    output.write(entry.tobuf())
+                with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                        ValueError, "Unsafe or unexpected desktop archive entry"):
+                    INSTALL.extract(archive, Path(temporary), INSTALL.digest(archive))
+        archive = self.home / "duplicates.tar.gz"
+        with tarfile.open(archive, "w:gz") as output:
+            for _ in range(2):
+                entry = tarfile.TarInfo("muxy-desktop/muxy")
+                entry.size = 1
+                output.addfile(entry, io.BytesIO(b"x"))
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaises(ValueError):
+            INSTALL.extract(archive, Path(temporary), INSTALL.digest(archive))
+        self.assertFalse((self.home / "escaped").exists())
+
+    def test_wrong_architecture_channel_and_mismatched_helpers_are_rejected(self):
+        for options in ({"arch": "unsupported"}, {"channel": "stable"},
+                        {"build": {"version": self.new, "compatibility": 999, "protocol": [99]}}):
+            with self.subTest(options=options):
+                archive, checksum = self.package(self.new, **options)
+                with self.assertRaises(ValueError):
+                    INSTALL.stage(self.root, archive, self.new, checksum)
+                self.assertFalse((self.root / "versions" / self.new).exists())
+
+    def test_staged_tampering_is_detected_before_activation(self):
+        self.staged(self.old)
+        candidate = self.staged(self.new)
+        INSTALL.switch(self.root, self.old)
+        (candidate / "muxy-server").write_text("modified")
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            INSTALL.activate(self.root, self.new, self.old, 12345)
+        self.assertEqual(INSTALL.current_version(self.root), self.old)
+
+    def test_failed_restart_setup_rolls_back_the_entire_release_and_allows_retry(self):
+        self.staged(self.old)
+        self.staged(self.new)
+        INSTALL.switch(self.root, self.old)
+        with self.assertRaises(OSError):
+            INSTALL.activate(self.root, self.new, self.old, 12345,
+                             spawn=lambda *args, **kwargs: (_ for _ in ()).throw(OSError("spawn failed")))
+        self.assertEqual(INSTALL.current_version(self.root), self.old)
+        INSTALL.activate(self.root, self.new, self.old, 12345, spawn=lambda *args, **kwargs: None)
+        self.assertEqual(INSTALL.current_version(self.root), self.new)
+        self.assertTrue((self.root / "versions" / self.old / "muxy-server").exists())
+        with self.assertRaisesRegex(ValueError, "changed"):
+            INSTALL.activate(self.root, self.new, self.old, 12345)
+
+    def test_prune_keeps_running_helpers_previous_release_and_pending_updates(self):
+        ancient = self.staged("2.0.0-beta.9")
+        self.staged(self.old)
+        self.staged(self.new)
+        pending = self.staged("2.0.0-beta.12")
+        INSTALL.switch(self.root, self.new)
+        INSTALL.atomic_json(self.root / "previous.json", {"version": self.old})
+        with (ancient / ".lease").open() as running:
+            fcntl.flock(running, fcntl.LOCK_SH)
+            INSTALL.prune(self.root)
+            self.assertTrue(ancient.exists())
+        INSTALL.prune(self.root)
+        self.assertFalse(ancient.exists())
+        self.assertTrue((self.root / "versions" / self.old).exists())
+        self.assertTrue(pending.exists())
+
+    def test_restart_waits_for_concurrent_helper_startup(self):
+        self.staged(self.old)
+        self.staged(self.new)
+        INSTALL.switch(self.root, self.new)
+        waiting = threading.Event()
+        sleep = INSTALL.time.sleep
+
+        def retry(delay):
+            waiting.set()
+            sleep(delay)
+
+        with ThreadPoolExecutor(max_workers=1) as workers, \
+                patch.object(INSTALL.subprocess, "Popen") as spawn, \
+                patch.object(INSTALL.time, "sleep", side_effect=retry):
+            spawn.return_value.wait.return_value = 0
+            with INSTALL.locked(self.root):
+                restart = workers.submit(INSTALL.restart, self.root, self.new, self.old, -1)
+                self.assertTrue(waiting.wait(timeout=5), "Restart did not wait for the installation lock")
+                spawn.assert_not_called()
+            restart.result(timeout=5)
+            spawn.assert_called_once()
+        self.assertEqual(INSTALL.current_version(self.root), self.new)
+
+    def test_failed_app_startup_restores_all_executables_and_relaunches_previous(self):
+        self.staged(self.old)
+        self.staged(self.new)
+        INSTALL.switch(self.root, self.new)
+        launched = []
+
+        def spawn(*args, **kwargs):
+            launched.append(INSTALL.current_version(self.root))
+            child = unittest.mock.Mock()
+            child.wait.return_value = 1
+            return child
+
+        with patch.object(INSTALL.subprocess, "Popen", side_effect=spawn):
+            INSTALL.restart(self.root, self.new, self.old, -1)
+        self.assertEqual(launched, [self.new, self.old])
+        self.assertEqual(INSTALL.current_version(self.root), self.old)
+        for binary in INSTALL.BINARIES:
+            self.assertEqual((self.root / "current" / binary).resolve().parent.name, self.old)
+
+    def test_install_and_removal_preserve_unrelated_commands_and_user_data(self):
+        self.staged(self.old)
+        INSTALL.switch(self.root, self.old)
+        commands = self.home / ".local/bin"
+        commands.mkdir(parents=True)
+        unrelated = commands / "muxy-beta"
+        unrelated.write_text("unrelated CLI")
+        profile = self.home / "data/muxy-beta"
+        profile.mkdir(parents=True)
+        (profile / "settings.toml").write_text("keep me")
+        INSTALL.integrate(self.root, self.old)
+        self.assertEqual(unrelated.read_text(), "unrelated CLI")
+        with (self.root / "versions" / self.old / ".lease").open() as running:
+            fcntl.flock(running, fcntl.LOCK_SH)
+            with self.assertRaises(BlockingIOError):
+                INSTALL.uninstall(self.root)
+            self.assertTrue((commands / "muxy-server-beta").exists())
+        INSTALL.uninstall(self.root)
+        self.assertFalse(self.root.exists())
+        self.assertFalse((commands / "muxy-server-beta").is_symlink())
+        self.assertEqual(unrelated.read_text(), "unrelated CLI")
+        self.assertEqual((profile / "settings.toml").read_text(), "keep me")
+
+    def test_symlinked_installation_and_competing_mutations_are_rejected(self):
+        link = self.home / "linked"
+        link.symlink_to(self.root)
+        with self.assertRaises(ValueError), INSTALL.locked(link):
+            pass
+        with INSTALL.locked(self.root):
+            with self.assertRaises(BlockingIOError), INSTALL.locked(self.root):
+                pass
+
+    def test_uninstall_keeps_unowned_files_inside_the_installation_root(self):
+        self.staged(self.old)
+        INSTALL.switch(self.root, self.old)
+        retained = self.root / "notes.txt"
+        retained.write_text("user data")
+        INSTALL.uninstall(self.root)
+        self.assertEqual(retained.read_text(), "user data")
+        self.assertFalse((self.root / "versions").exists())
+
+    def test_downloads_refuse_a_plaintext_redirect_before_following_it(self):
+        request = INSTALL.urllib.request.Request("https://github.com/muxy-app/muxy/releases/download/test")
+        with self.assertRaisesRegex(ValueError, "insecure"):
+            INSTALL.HTTPSRedirectHandler().redirect_request(request, None, 302, "redirect", {}, "http://example.com/archive")
+
+    def test_linux_metadata_is_complete_checksummed_and_keeps_macos_assets(self):
+        for name in (f"Muxy-{self.new}-arm64.dmg", f"Muxy-{self.new}-x86_64.dmg",
+                     f"muxy-desktop-{self.new}-linux-arm64.tar.gz", f"muxy-desktop-{self.new}-linux-x86_64.tar.gz"):
+            (self.home / name).write_bytes(b"release bytes")
+        metadata = RELEASE.update_metadata(self.new, "muxy-app/muxy", self.home)
+        self.assertEqual(set(metadata["platforms"]), {"macos-aarch64", "macos-x86_64", "linux-aarch64", "linux-x86_64"})
+        self.assertEqual(metadata["platforms"]["linux-aarch64"]["sha256"], hashlib.sha256(b"release bytes").hexdigest())
+        (self.home / f"muxy-desktop-{self.new}-linux-x86_64.tar.gz").unlink()
+        with self.assertRaises(FileNotFoundError):
+            RELEASE.update_metadata(self.new, "muxy-app/muxy", self.home)
+
+    def test_desktop_audit_does_not_weaken_standalone_glibc_or_library_policy(self):
+        inputs = ["Class: ELF64\nData: little endian\nMachine: AArch64\n",
+                  "[Requesting program interpreter: /lib/ld-linux-aarch64.so.1]",
+                  "(NEEDED) [libc.so.6]\n(NEEDED) [libfreetype.so.6]\n",
+                  "Name: GLIBC_2.39\n", "libc.so.6 => /lib/aarch64-linux-gnu/libc.so.6", "aarch64-unknown-linux-gnu"]
+        AUDIT.audit(*inputs, desktop=True)
+        with self.assertRaises(ValueError):
+            AUDIT.audit(*inputs)
+        for index, addition in ((2, "(NEEDED) [libunknown.so]\n"), (3, "Name: GLIBC_2.40\n"),
+                                (4, "\nlibfreetype.so.6 => not found"), (2, "(RUNPATH) [/build]")):
+            bad = inputs.copy()
+            bad[index] += addition
+            with self.assertRaises(ValueError):
+                AUDIT.audit(*bad, desktop=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

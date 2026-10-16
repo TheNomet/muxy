@@ -78,7 +78,7 @@ pub(crate) fn prepare_update(
     update: &crate::updater::PreparedUpdate,
     mode: UpdateMode,
     expected: &muxy_protocol::ServerInfo,
-) -> Result<Option<std::fs::File>, ClientError> {
+) -> Result<Option<muxy_core::file_lock::FileLock>, ClientError> {
     let installation = match lock_for_update(socket) {
         Ok(lock) => lock,
         Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(None),

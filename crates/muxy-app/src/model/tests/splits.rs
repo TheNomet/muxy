@@ -136,7 +136,11 @@ fn equalize_splits_evens_resized_panes_from_the_shortcut_and_the_terminal_menu(
         assert_eq!(store::load(&model.path).expect("saved"), model.state);
     };
     view.update(cx, |model, cx| resize(model, cx));
-    cx.simulate_keystrokes("cmd-ctrl-=");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-ctrl-="
+    } else {
+        "ctrl-alt-="
+    });
     view.read_with(cx, |model, _| assert_even_and_saved(model));
 
     view.update(cx, |model, cx| {

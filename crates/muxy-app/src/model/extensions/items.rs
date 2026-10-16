@@ -110,7 +110,8 @@ impl AppModel {
         items
     }
 
-    /// An SF Symbol, or a loaded template SVG tinted with `color`.
+    /// An SF Symbol, or a loaded template SVG tinted with `color`. An icon
+    /// that cannot be drawn shows the extension glyph in its place.
     pub(crate) fn extension_icon(
         &self,
         root: &Path,
@@ -119,9 +120,9 @@ impl AppModel {
         color: Hsla,
     ) -> AnyElement {
         match icon {
-            Icon::Symbol(symbol) => {
-                SymbolGlyph::new(symbol.clone(), size, color).into_any_element()
-            }
+            Icon::Symbol(symbol) => SymbolGlyph::new(symbol.clone(), size, color)
+                .or(FALLBACK)
+                .into_any_element(),
             Icon::Svg(svg) => {
                 let path = root.join(svg);
                 match self.extensions.items.icons.get(&path) {

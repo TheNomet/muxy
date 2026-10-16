@@ -42,6 +42,7 @@ pub(crate) struct Surface {
 pub(crate) struct Browsers {
     pub views: HashMap<PaneId, Surface>,
     profiles: Option<ProfileManager>,
+    retiring: HashSet<String>,
     favicons: HashMap<String, Option<Arc<gpui::RenderImage>>>,
     /// Panes opened from the UI, whose address field takes focus.
     focus_address: HashSet<PaneId>,
@@ -144,6 +145,14 @@ impl AppModel {
             .retain(|pane| panes.contains(pane));
         let visible = self.visible_panes();
         for pane in &visible {
+            if self
+                .state
+                .browser(*pane)
+                .and_then(|browser| browser.profile.as_ref())
+                .is_some_and(|profile| self.browsers.retiring.contains(profile))
+            {
+                continue;
+            }
             if panes.contains(pane)
                 && !self.browsers.views.contains_key(pane)
                 && !self.browsers.failures.contains_key(pane)
@@ -527,6 +536,10 @@ impl AppModel {
     ) {
         use crate::views::menu::{Command, Item};
         let items = match menu {
+            Menu::Page => vec![Item::action(
+                tr!("Web Inspector"),
+                Command::BrowserInspect(pane),
+            )],
             Menu::External => {
                 let url = self
                     .browser_view(pane)
@@ -601,6 +614,9 @@ impl AppModel {
         profile: String,
         cx: &mut Context<Self>,
     ) {
+        if self.browsers.retiring.contains(&profile) {
+            return;
+        }
         let url = self
             .browser_view(pane)
             .map(|view| view.read(cx).page.url.clone());

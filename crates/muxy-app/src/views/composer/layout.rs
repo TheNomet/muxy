@@ -1,6 +1,6 @@
 use super::{Close, Composer, ComposerEvent, Insert, Submit, ToggleVoice};
 use gpui::prelude::FluentBuilder;
-use gpui::{AnyElement, FontWeight, MouseButton, Pixels, Point, Size, point, size};
+use gpui::{AnyElement, FontWeight, MouseButton, Pixels, Point, Size, size};
 use gpui::{
     AppContext, Context, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, Window, div, px,
@@ -89,14 +89,9 @@ impl Composer {
             .when(id == "composer-more", |button| {
                 let anchor = self.menu_anchor.clone();
                 button.relative().child(
-                    gpui::canvas(
-                        move |bounds, _, _| {
-                            anchor.set(point(bounds.left(), bounds.bottom() + px(1.0)));
-                        },
-                        |_, (), _, _| {},
-                    )
-                    .absolute()
-                    .size_full(),
+                    gpui::canvas(move |bounds, _, _| anchor.set(bounds), |_, (), _, _| {})
+                        .absolute()
+                        .size_full(),
                 )
             })
             .rounded(m.radius_xl())
@@ -351,18 +346,18 @@ impl Composer {
                     }),
             );
         }
-        let transcript = if snapshot.phase == muxy_ui::voice::Phase::Starting {
-            tr!("Preparing on-device dictation…")
-        } else if snapshot.transcript.is_empty() {
-            tr!("Listening…")
-        } else {
-            snapshot.transcript.clone().into()
+        let transcript = match snapshot.phase {
+            muxy_ui::voice::Phase::Starting => tr!("Preparing on-device dictation…"),
+            muxy_ui::voice::Phase::Transcribing => tr!("Transcribing on this computer…"),
+            _ if muxy_ui::voice::LOCAL_MODEL => tr!("Finish recording to transcribe."),
+            _ if snapshot.transcript.is_empty() => tr!("Listening…"),
+            _ => snapshot.transcript.clone().into(),
         };
         let elapsed = snapshot.elapsed.as_secs();
         row.child(
             div()
                 .flex_none()
-                .font_family(".AppleSystemUIFontMonospaced")
+                .font_family(muxy_ui::font::monospace())
                 .text_size(m.font_xs())
                 .font_weight(FontWeight::BOLD)
                 .text_color(if paused {
@@ -370,7 +365,9 @@ impl Composer {
                 } else {
                     self.theme.diff_remove
                 })
-                .child(if paused {
+                .child(if snapshot.phase == muxy_ui::voice::Phase::Transcribing {
+                    tr!("PROCESSING")
+                } else if paused {
                     tr!("PAUSED")
                 } else {
                     tr!("● LIVE")
@@ -386,7 +383,7 @@ impl Composer {
         .child(
             div()
                 .flex_none()
-                .font_family(".AppleSystemUIFontMonospaced")
+                .font_family(muxy_ui::font::monospace())
                 .text_size(m.font_xs())
                 .text_color(self.theme.fg_dim)
                 .child(format!("{:02}:{:02}", elapsed / 60, elapsed % 60)),
@@ -451,6 +448,8 @@ impl Composer {
         let enabled = !self.sending && !self.recording();
         let recording =
             self.recording() && self.voice_snapshot.phase != muxy_ui::voice::Phase::Starting;
+        let transcribing =
+            recording && self.voice_snapshot.phase == muxy_ui::voice::Phase::Transcribing;
         div()
             .flex()
             .flex_none()
@@ -465,22 +464,34 @@ impl Composer {
                 |_, _, cx| cx.emit(ComposerEvent::Attach),
                 cx,
             ))
-            .child(self.glyph_button(
-                "composer-voice",
-                if recording { "stop.fill" } else { "mic" },
-                if recording {
-                    tr_key!("Finish Dictation")
-                } else {
-                    tr_key!("Start Dictation")
-                },
-                if self.recording() {
-                    Control::Recording
-                } else {
-                    Control::Toolbar
-                },
-                |view, _, cx| view.toggle_voice(cx),
-                cx,
-            ))
+            .children(
+                (self.dictation != muxy_core::capability::Capability::Unsupported).then(|| {
+                    self.glyph_button(
+                        "composer-voice",
+                        if transcribing {
+                            "xmark"
+                        } else if recording {
+                            "stop.fill"
+                        } else {
+                            "mic"
+                        },
+                        if transcribing {
+                            tr_key!("Cancel Dictation")
+                        } else if recording {
+                            tr_key!("Finish Dictation")
+                        } else {
+                            tr_key!("Start Dictation")
+                        },
+                        if self.recording() {
+                            Control::Recording
+                        } else {
+                            Control::Toolbar
+                        },
+                        |view, _, cx| view.toggle_voice(cx),
+                        cx,
+                    )
+                }),
+            )
             .child(self.glyph_button(
                 "composer-more",
                 "ellipsis",
@@ -551,7 +562,9 @@ impl Composer {
             .capture_action(
                 cx.listener(|view, _: &muxy_ui::text_input::InsertNewline, _, cx| {
                     if view.recording() {
-                        view.toggle_voice(cx);
+                        if view.voice_snapshot.phase != muxy_ui::voice::Phase::Transcribing {
+                            view.toggle_voice(cx);
+                        }
                         cx.stop_propagation();
                     }
                 }),

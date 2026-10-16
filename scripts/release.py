@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Versions and packaging metadata of beta (X.Y.Z-beta.N) and stable (X.Y.Z) releases."""
 import argparse
+import hashlib
 import json
 import plistlib
 import re
@@ -171,6 +172,21 @@ def update_metadata(version, repository, directory):
         platforms[platform] = {
             "url": f"https://github.com/{repository}/releases/download/v{version}/{filename}",
             "size": size,
+        }
+    for platform, arch in (("linux-aarch64", "arm64"), ("linux-x86_64", "x86_64")):
+        filename = f"muxy-desktop-{version}-linux-{arch}.tar.gz"
+        path = directory / filename
+        size = path.stat().st_size
+        if not 0 < size <= 2 * 1024**3 or path.is_symlink():
+            raise ValueError(f"invalid desktop update for {arch}")
+        checksum = hashlib.sha256()
+        with path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                checksum.update(block)
+        platforms[platform] = {
+            "url": f"https://github.com/{repository}/releases/download/v{version}/{filename}",
+            "size": size,
+            "sha256": checksum.hexdigest(),
         }
     return {"schema": 1, "version": version, "platforms": platforms}
 

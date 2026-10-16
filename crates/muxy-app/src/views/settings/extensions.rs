@@ -251,6 +251,7 @@ impl ExtensionsView {
         }
         let (sender, receiver) = async_channel::bounded(1);
         match muxy_ui::dialog::choose_folder(
+            cx,
             &tr!("Choose an extension folder containing package.json or a built dist folder"),
             std::path::Path::new("/"),
             move |path| {
@@ -268,18 +269,21 @@ impl ExtensionsView {
             }
         }
         cx.spawn(async move |view, cx| {
-            let path = receiver.recv().await.ok().flatten();
+            let answer = receiver.recv().await.unwrap_or(Ok(None));
             let task = view.update(cx, |view, cx| {
                 view.folder = None;
-                path.map(|path| {
-                    view.model
-                        .update(cx, |model, cx| model.load_unpacked_extension(path, cx))
+                answer.map(|path| {
+                    path.map(|path| {
+                        view.model
+                            .update(cx, |model, cx| model.load_unpacked_extension(path, cx))
+                    })
                 })
             });
             let result = match task {
-                Ok(Some(Ok(task))) => task.await,
-                Ok(None) => Ok(()),
-                Ok(Some(Err(error))) | Err(error) => Err(error.to_string()),
+                Ok(Ok(Some(Ok(task)))) => task.await,
+                Ok(Ok(None)) => Ok(()),
+                Ok(Err(error)) => Err(error.to_string()),
+                Ok(Ok(Some(Err(error)))) | Err(error) => Err(error.to_string()),
             };
             let _ = view.update(cx, |view, cx| {
                 view.mutation = None;
@@ -645,6 +649,19 @@ impl Render for ExtensionsView {
             })
             .collect();
         let errors = registry.errors.clone();
+        let capabilities = &model.read(cx).capabilities;
+        let mut unavailable: Vec<_> = [
+            muxy_core::capability::Feature::ExtensionScripts,
+            muxy_core::capability::Feature::ExtensionWebviews,
+        ]
+        .into_iter()
+        .filter_map(|feature| capabilities.reason(feature))
+        .collect();
+        if !unavailable.is_empty() {
+            unavailable.push(muxy_core::tr!(
+                "Language packs and other resource-only extensions keep working."
+            ));
+        }
         let body = if let Some(details) = &self.selected {
             self.details_body(details, &installed, cx)
         } else if self.tab == Tab::Installed {
@@ -694,6 +711,11 @@ impl Render for ExtensionsView {
                                 errors
                                     .iter()
                                     .map(|error| form::note(self.style(), error, true)),
+                            )
+                            .children(
+                                unavailable
+                                    .iter()
+                                    .map(|reason| form::note(self.style(), reason, false)),
                             )
                             .child(body),
                     ),

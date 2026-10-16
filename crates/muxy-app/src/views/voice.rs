@@ -37,12 +37,19 @@ impl EventEmitter<VoiceEvent> for VoicePanel {}
 impl VoicePanel {
     pub(crate) fn new(
         language: String,
+        model: String,
         auto_send: bool,
         theme: Theme,
         metrics: Metrics,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::with_recorder(Recorder::start(language), auto_send, theme, metrics, cx)
+        Self::with_recorder(
+            Recorder::start(language, model),
+            auto_send,
+            theme,
+            metrics,
+            cx,
+        )
     }
 
     fn with_recorder(
@@ -139,6 +146,9 @@ impl VoicePanel {
     }
 
     fn pause(&mut self, cx: &mut Context<Self>) {
+        if self.snapshot.phase == Phase::Transcribing {
+            return;
+        }
         if let Some(recorder) = &self.recorder {
             recorder.pause(self.snapshot.phase != Phase::Paused);
         }
@@ -243,7 +253,7 @@ impl VoicePanel {
                 div()
                     .flex_none()
                     .w(m.scaled(60.0))
-                    .font_family(".AppleSystemUIFontMonospaced")
+                    .font_family(muxy_ui::font::monospace())
                     .font_weight(FontWeight::MEDIUM)
                     .text_size(m.font_emphasis())
                     .child(format!("{:02}:{:02}", elapsed / 60, elapsed % 60)),
@@ -255,13 +265,21 @@ impl VoicePanel {
                     .flex_none()
                     .gap(m.spacing3())
                     .child(self.button("voice-cancel", "xmark", self.theme.fg_muted, cx))
-                    .child(self.button(
-                        "voice-pause",
-                        if paused { "play.fill" } else { "pause.fill" },
-                        self.theme.fg,
-                        cx,
-                    ))
-                    .child(self.button("voice-finish", "circle.fill", self.theme.diff_remove, cx)),
+                    .when(self.snapshot.phase != Phase::Transcribing, |buttons| {
+                        buttons
+                            .child(self.button(
+                                "voice-pause",
+                                if paused { "play.fill" } else { "pause.fill" },
+                                self.theme.fg,
+                                cx,
+                            ))
+                            .child(self.button(
+                                "voice-finish",
+                                "circle.fill",
+                                self.theme.diff_remove,
+                                cx,
+                            ))
+                    }),
             )
             .into_any_element()
     }
@@ -304,13 +322,16 @@ impl VoicePanel {
                 },
             ),
         ] {
+            if self.snapshot.phase == Phase::Transcribing && key != "⎋" {
+                continue;
+            }
             hints = hints.child(
                 div()
                     .flex()
                     .gap(m.spacing1())
                     .child(
                         div()
-                            .font_family(".AppleSystemUIFontMonospaced")
+                            .font_family(muxy_ui::font::monospace())
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(self.theme.fg_muted)
                             .child(key),
@@ -347,7 +368,11 @@ impl Render for VoicePanel {
         let m = self.metrics;
         let error = self.snapshot.error.as_ref();
         let text = error.cloned().unwrap_or_else(|| {
-            if self.snapshot.transcript.is_empty() {
+            if self.snapshot.phase == Phase::Transcribing {
+                tr!("Transcribing on this computer…").to_string()
+            } else if muxy_ui::voice::LOCAL_MODEL {
+                tr!("Finish recording to transcribe.").to_string()
+            } else if self.snapshot.transcript.is_empty() {
                 tr!("Listening...").to_string()
             } else {
                 self.snapshot.transcript.clone()

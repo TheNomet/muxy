@@ -27,10 +27,10 @@ impl FromStr for KeyChord {
         let mut modifiers = [false; 5];
         let names = ["cmd", "ctrl", "alt", "shift", "fn"];
         while let Some((component, tail)) = rest.split_once('-') {
-            let Some(index) = names
-                .iter()
-                .position(|name| component.eq_ignore_ascii_case(name))
-            else {
+            let Some(index) = names.iter().position(|name| {
+                component.eq_ignore_ascii_case(name)
+                    || (*name == "cmd" && component.eq_ignore_ascii_case("super"))
+            }) else {
                 break;
             };
             if modifiers[index] {

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use gpui::{Action, AppContext, Context, Focusable, Window};
+use gpui::{Action, AppContext, Context, Focusable, SharedString, Window};
 use muxy_core::shortcuts::ShortcutId;
 use muxy_ui::command_palette::{Command, CommandPalette, CommandPaletteEvent, Registry};
 
@@ -17,10 +17,17 @@ pub(crate) fn action(
     title: &'static str,
     action: impl Action,
 ) -> Command<Handler> {
-    let handler: Handler = Rc::new(move |_, window, cx| {
-        window.dispatch_action(action.boxed_clone(), cx);
-    });
-    let command = Command::new(id.name(), muxy_ui::l10n::translate(title), handler).keywords(title);
+    titled(model, id, muxy_ui::l10n::translate(title), action).keywords(title)
+}
+
+/// A palette command for a shortcut action, under a title already translated.
+pub(crate) fn titled(
+    model: &AppModel,
+    id: ShortcutId,
+    title: impl Into<SharedString>,
+    action: impl Action,
+) -> Command<Handler> {
+    let command = Command::new(id.name(), title, dispatch(action));
     match model.settings.keymap.chord(id) {
         Some(chord) => command.shortcut(
             gpui::Keystroke::parse(chord.as_str())
@@ -28,6 +35,13 @@ pub(crate) fn action(
         ),
         None => command,
     }
+}
+
+/// Runs `action` where the keyboard focus is, as its shortcut would.
+pub(crate) fn dispatch(action: impl Action) -> Handler {
+    Rc::new(move |_, window, cx| {
+        window.dispatch_action(action.boxed_clone(), cx);
+    })
 }
 
 impl AppModel {

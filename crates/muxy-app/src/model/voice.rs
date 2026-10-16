@@ -5,6 +5,7 @@ use gpui::{
     Window, div,
 };
 use muxy_app_core::{PaneId, ServerId, composer::DraftId};
+use muxy_core::capability::Feature;
 use muxy_protocol::{ChannelId, Modes};
 use muxy_ui::tr;
 
@@ -32,6 +33,9 @@ impl AppModel {
         }
         if self.voice.view.is_some() {
             self.close_voice(cx);
+            return;
+        }
+        if !self.require(Feature::Voice, cx) {
             return;
         }
         if let Some(view) = &self.composer.view {
@@ -63,6 +67,7 @@ impl AppModel {
         let view = cx.new(|cx| {
             VoicePanel::new(
                 self.settings.composer.language.clone(),
+                self.settings.composer.voice_model.clone(),
                 self.settings.composer.voice_auto_send,
                 self.theme.clone(),
                 self.metrics,

@@ -78,7 +78,10 @@ impl AppModel {
         if matches!(self.overlay, Some(Overlay::Password(_))) {
             self.pending_remote = None;
         }
-        self.overlay = None;
+        self.focus_return = match self.overlay.take() {
+            Some(Overlay::Menu(menu)) => menu.returns_focus_to,
+            _ => None,
+        };
         self.overlay_subscription = None;
         self.focus_requested = true;
         cx.notify();

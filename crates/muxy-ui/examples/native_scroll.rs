@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 #[allow(unsafe_code, unreachable_pub)]
 mod adapter {
     include!("../src/native_scroll.rs");
@@ -250,8 +251,12 @@ mod adapter {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     adapter::show_scrollers_always();
     adapter::use_overlay_scrollers();
     adapter::verify()
 }
+
+#[cfg(not(target_os = "macos"))]
+fn main() {}

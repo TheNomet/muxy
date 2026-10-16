@@ -3,16 +3,8 @@ use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSImage, NSImageSymbolConfiguration, NSImageSymbolScale};
 use objc2_foundation::NSString;
 
+use super::raster::Mask;
 use crate::bitmap;
-
-#[derive(Debug)]
-pub(super) struct Mask {
-    pub width: u32,
-    pub height: u32,
-    pub logical_width: f32,
-    pub logical_height: f32,
-    pub alpha: Vec<u8>,
-}
 
 #[allow(
     clippy::cast_possible_truncation,

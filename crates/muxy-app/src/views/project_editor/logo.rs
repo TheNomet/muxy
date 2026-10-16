@@ -315,12 +315,17 @@ fn prompt(
 ) -> gpui::Task<Result<Option<PathBuf>, String>> {
     if let Some(directory) = directory {
         let (sender, receiver) = async_channel::bounded(1);
-        let dialog = muxy_ui::dialog::choose_file(&tr!("Choose Logo"), directory, move |path| {
-            let _ = sender.try_send(path);
-        });
+        let dialog =
+            muxy_ui::dialog::choose_file(cx, &tr!("Choose Logo"), directory, move |path| {
+                let _ = sender.try_send(path);
+            });
         return cx.spawn(async move |_, _| {
             let _dialog = dialog.map_err(|error| error.to_string())?;
-            receiver.recv().await.map_err(|error| error.to_string())
+            receiver
+                .recv()
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())
         });
     }
     let result = cx.prompt_for_paths(gpui::PathPromptOptions {

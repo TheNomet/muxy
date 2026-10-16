@@ -3,13 +3,66 @@ use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Styled, Window, div, px,
 };
+use muxy_core::capability::Feature;
 use muxy_core::quick_terminal::QuickTerminalShortcut;
 use muxy_ui::controls;
 use muxy_ui::l10n::tr_key;
 use muxy_ui::tr;
 
+/// The saved preferences without controls, while the Quick Terminal cannot run here.
+fn stored_rows(view: &SettingsView, reason: &str) -> Vec<AnyElement> {
+    let settings = &view.snapshot.settings.quick_terminal;
+    let mut rows = Vec::new();
+    for (id, label, value) in [
+        (
+            "quick-enabled",
+            tr_key!("Enable Quick Terminal"),
+            if settings.enabled {
+                tr!("On")
+            } else {
+                tr!("Off")
+            },
+        ),
+        (
+            "quick-shortcut",
+            tr_key!("Open Quick Terminal"),
+            settings.shortcut.key_combo().map_or_else(
+                || tr!("No shortcut assigned"),
+                |combo| combo.display().into(),
+            ),
+        ),
+        (
+            "quick-size",
+            tr_key!("Terminal size"),
+            format!("{} × {}", settings.width, settings.height).into(),
+        ),
+        (
+            "quick-transparency",
+            tr_key!("Terminal transparency"),
+            tr!("%lld%%", settings.transparency),
+        ),
+        (
+            "quick-blur",
+            tr_key!("Background vibrancy"),
+            tr!("%lld%%", settings.blur),
+        ),
+    ] {
+        if !view.matches(Category::QuickTerminal, label) {
+            continue;
+        }
+        rows.push(view.row(id, label, view.stored(id, &value)));
+        if rows.len() == 1 {
+            rows.push(view.note(reason, false).into_any_element());
+        }
+    }
+    rows
+}
+
 #[allow(clippy::too_many_lines, reason = "Declarative settings layout")]
 pub(super) fn rows(view: &SettingsView, cx: &mut Context<SettingsView>) -> Vec<AnyElement> {
+    if let Some(reason) = view.snapshot.capabilities.reason(Feature::QuickTerminal) {
+        return stored_rows(view, &reason);
+    }
     let settings = &view.snapshot.settings.quick_terminal;
     let mut rows = Vec::new();
     if view.matches(Category::QuickTerminal, tr_key!("Enable Quick Terminal")) {
@@ -203,7 +256,7 @@ impl SettingsView {
     }
 
     fn record_quick_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.quick_recording.take().is_some() {
+        if self.cancel_quick_recording(cx) {
             self.results.dirty = true;
             cx.notify();
             return;
@@ -211,11 +264,13 @@ impl SettingsView {
         self.focus.focus(window);
         match muxy_ui::quick_terminal::start_shortcut_recording() {
             Ok((recorder, receiver)) => {
+                self.recording = None;
+                cx.emit(SettingsEvent::QuickRecording(true));
                 let task = cx.spawn(async move |view, cx| {
                     if let Ok(event) = receiver.recv().await {
                         let _ = view.update(cx, |view, cx| {
                             use muxy_ui::quick_terminal::ShortcutRecordingEvent;
-                            view.quick_recording = None;
+                            view.cancel_quick_recording(cx);
                             match event {
                                 ShortcutRecordingEvent::Captured(capture) => {
                                     let mut settings =
@@ -244,5 +299,15 @@ impl SettingsView {
         }
         self.results.dirty = true;
         cx.notify();
+    }
+
+    pub(super) fn cancel_quick_recording(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.quick_recording.take().is_none() {
+            return false;
+        }
+        cx.emit(SettingsEvent::QuickRecording(false));
+        self.results.dirty = true;
+        cx.notify();
+        true
     }
 }

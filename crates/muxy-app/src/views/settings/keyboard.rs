@@ -96,7 +96,11 @@ pub(super) fn extension_row(
 }
 
 pub(super) fn row(pane: &SettingsView, index: usize, cx: &mut Context<SettingsView>) -> AnyElement {
-    let id = muxy_core::shortcuts::ALL[index].id;
+    let shortcut = &muxy_core::shortcuts::ALL[index];
+    let id = shortcut.id;
+    let unavailable = shortcut
+        .feature()
+        .and_then(|feature| pane.snapshot.capabilities.reason(feature));
     let recording = pane.recording.as_deref() == Some(id);
     let chord = pane.snapshot.settings.keymap.binding(id);
     let label = if recording {
@@ -136,7 +140,13 @@ pub(super) fn row(pane: &SettingsView, index: usize, cx: &mut Context<SettingsVi
             )
             .track_focus(&pane.results.shortcut_focus[index][1]),
         );
-    pane.row(id, &pane.shortcut_names[index], control.into_any_element())
+    pane.row_with_description(
+        id,
+        &pane.shortcut_names[index],
+        unavailable.as_deref(),
+        control.into_any_element(),
+        pane.compact,
+    )
 }
 
 impl SettingsView {
@@ -146,6 +156,7 @@ impl SettingsView {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        self.cancel_quick_recording(cx);
         self.results.dirty = true;
         self.recording = Some(id.into());
         self.errors.remove(id);

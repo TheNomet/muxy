@@ -141,6 +141,7 @@ pub(crate) enum Change {
 }
 
 pub(crate) enum SettingsEvent {
+    QuickRecording(bool),
     Backup(backup::Action),
     Change(Change),
     PreviewTerminal(&'static str, String),
@@ -160,6 +161,7 @@ pub(crate) enum SettingsEvent {
 #[derive(Clone)]
 pub(crate) struct Snapshot {
     pub(crate) settings: Settings,
+    pub(crate) capabilities: muxy_core::capability::Capabilities,
     pub(crate) quick_shortcut_status: String,
     pub(crate) terminal: TerminalSettings,
     pub(crate) server: Option<muxy_protocol::ServerSettingsDoc>,
@@ -250,7 +252,15 @@ impl SettingsView {
         let recorder = cx.intercept_keystrokes(move |event, window, cx| {
             let _ = weak.update(cx, |pane: &mut Self, cx| {
                 if pane.focus.is_focused(window) {
-                    pane.record_key(&event.keystroke, cx);
+                    if pane
+                        .quick_recording
+                        .as_ref()
+                        .is_some_and(|(recorder, _)| recorder.record(&event.keystroke))
+                    {
+                        cx.stop_propagation();
+                    } else {
+                        pane.record_key(&event.keystroke, cx);
+                    }
                 }
             });
         });
@@ -322,6 +332,7 @@ impl SettingsView {
             "command-text",
             "composer-font",
             "composer-line-height",
+            "composer-voice-model",
             "quick-width",
             "quick-height",
             "sidebar-vibrancy-level",
@@ -385,6 +396,11 @@ impl SettingsView {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn browser_profiles(&self) -> &[browser::Profile] {
+        &self.snapshot.browser_profiles
+    }
+
     pub(crate) fn sync(&mut self, snapshot: Snapshot, theme: Theme, cx: &mut Context<Self>) {
         self.results.dirty = true;
         self.snapshot = snapshot;
@@ -420,6 +436,10 @@ impl SettingsView {
             .map_or_else(String::new, |mobile| mobile.settings.port.to_string());
         for (id, value) in [
             ("composer-font", settings.composer.font_family.clone()),
+            (
+                "composer-voice-model",
+                settings.composer.voice_model.clone(),
+            ),
             (
                 "composer-line-height",
                 settings.composer.line_height.to_string(),
@@ -480,7 +500,7 @@ impl SettingsView {
         self.subscriptions
             .push(cx.on_focus_out(&self.focus, window, |pane, _, _, cx| {
                 pane.recording = None;
-                pane.quick_recording = None;
+                pane.cancel_quick_recording(cx);
                 pane.results.dirty = true;
                 cx.notify();
             }));
@@ -732,6 +752,11 @@ impl SettingsView {
 
     fn note(&self, text: &str, error: bool) -> gpui::Div {
         form::note(self.style(), text, error)
+    }
+
+    /// A stored value shown without a control, for a setting whose feature cannot run here.
+    fn stored(&self, id: &str, value: &str) -> AnyElement {
+        controls::button(self.style(), id, value, false, |_, _, _| {}).into_any_element()
     }
 
     fn field(&self, id: &'static str) -> AnyElement {

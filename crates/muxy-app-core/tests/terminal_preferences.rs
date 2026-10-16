@@ -240,7 +240,9 @@ fn every_legacy_option_is_editable_and_survives_saving_and_backup_merges() -> Re
 
     let restored = TerminalSettings::load_native(&path)?;
     assert_eq!(restored, settings);
-    assert_eq!(restored.font_families, ["Menlo", "Fallback", "Emoji"]);
+    let mut families = TerminalSettings::default().font_families;
+    families.extend(["Fallback".into(), "Emoji".into()]);
+    assert_eq!(restored.font_families, families);
     assert_eq!(restored.font.feature_list(), "ss01, -calt, cv01=2");
     assert_eq!(
         restored.font.codepoints,

@@ -207,7 +207,7 @@ pub(super) fn rows(
 /// Built-in openers for files clicked in a terminal, as `(setting value, label key)`.
 pub(super) const FILE_OPENERS: [(&str, &str); 3] = [
     ("system.editor", tr_key!("Project editor")),
-    ("system.finder", "Finder"),
+    ("system.finder", crate::opener::FILE_MANAGER),
     ("system.application", tr_key!("Default application")),
 ];
 

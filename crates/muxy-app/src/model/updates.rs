@@ -1,5 +1,5 @@
 mod status;
-#[cfg(test)]
+#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
 mod tests;
 
 use std::time::Duration;
@@ -11,6 +11,7 @@ use crate::boot::Work;
 use crate::server::{ServerUpdate, UpdateMode};
 use crate::updater::{Installation, PreparedUpdate, Release};
 use muxy_app_core::ServerId;
+use muxy_core::capability::{Capability, Feature};
 use muxy_core::release::{Channel, Version};
 use muxy_ui::tr;
 
@@ -20,7 +21,6 @@ use std::io::Write;
 #[derive(Default)]
 pub(super) struct Updater {
     installation: Option<Installation>,
-    unavailable: Option<String>,
     download: AppUpdatePhase,
     app_error: Option<String>,
     server_error: Option<String>,
@@ -76,13 +76,19 @@ impl Updater {
 
 impl AppModel {
     pub(super) fn start_update_checks(&mut self, cx: &mut Context<Self>) {
+        if !self.supports(Feature::Updates) {
+            return;
+        }
         if Version::current().is_none() {
-            self.updates.unavailable = Some(
-                tr!(
-                    "Automatic updates are available in installed releases of %@",
-                    Channel::current().app_name()
-                )
-                .to_string(),
+            self.capabilities.set(
+                Feature::Updates,
+                Capability::Unavailable(
+                    tr!(
+                        "Automatic updates are available in installed releases of %@",
+                        Channel::current().app_name()
+                    )
+                    .to_string(),
+                ),
             );
             return;
         }
@@ -119,7 +125,10 @@ impl AppModel {
                         }
                     }));
                 }
-                Err(error) => model.updates.unavailable = Some(error.to_string()),
+                Err(error) => model.capabilities.set(
+                    Feature::Updates,
+                    Capability::Unavailable(error.to_string()),
+                ),
             });
         }));
     }
@@ -327,9 +336,10 @@ impl AppModel {
         let Some(installation) = self.updates.installation.clone() else {
             if manual {
                 self.update_message(
-                    &self.updates.unavailable.clone().unwrap_or_else(|| {
-                        tr!("The updater is starting. Try again shortly.").to_string()
-                    }),
+                    &self.capabilities.reason(Feature::Updates).map_or_else(
+                        || tr!("The updater is starting. Try again shortly.").to_string(),
+                        std::borrow::Cow::into_owned,
+                    ),
                     cx,
                 );
             }
@@ -606,7 +616,7 @@ impl AppModel {
 
     pub(super) fn receive_update_prepared(
         &mut self,
-        result: Result<Option<std::fs::File>, muxy_client::ClientError>,
+        result: Result<Option<muxy_core::file_lock::FileLock>, muxy_client::ClientError>,
         cx: &mut Context<Self>,
     ) {
         if self.quitting != Quitting::Update {

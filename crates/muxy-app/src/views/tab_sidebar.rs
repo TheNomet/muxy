@@ -629,6 +629,7 @@ fn tab_row(
 pub(super) fn titlebar(
     model: &AppModel,
     sidebar_width: f32,
+    window: &Window,
     cx: &mut Context<AppModel>,
 ) -> AnyElement {
     let theme = &model.theme;
@@ -639,7 +640,8 @@ pub(super) fn titlebar(
         .items_center()
         .flex_none()
         .h(px(32.0))
-        .pl(px((titlebar::navigation_width(model) - sidebar_width)
+        .pl(px((titlebar::navigation_width(model, window)
+            - sidebar_width)
             .max(0.0)
             + 12.0))
         .child(

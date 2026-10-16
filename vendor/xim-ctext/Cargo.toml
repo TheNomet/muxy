@@ -1,0 +1,30 @@
+[package]
+edition = "2021"
+name = "xim-ctext"
+version = "0.3.0"
+authors = ["Riey <creeper844@gmail.com>"]
+build = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+description = "compound text en/decoder"
+license = "MIT"
+repository = "https://github.com/Riey/xim-rs"
+
+[lib]
+name = "xim_ctext"
+path = "src/lib.rs"
+
+[dependencies.encoding_rs]
+version = "0.8.35"
+
+[features]
+default = ["std"]
+std = []
+
+[workspace]
+
+[package.metadata.muxy]
+upstream-version = "0.4.1"
+decoding-fix = "https://github.com/Riey/xim-rs/pull/50"

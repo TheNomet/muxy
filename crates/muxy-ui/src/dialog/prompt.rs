@@ -24,39 +24,7 @@ use crate::controls::Style;
 use crate::theme::Metrics;
 use crate::tr;
 
-pub const ADDITIONAL_PROMPT_LIMIT: usize = 2000;
-
-/// Choices shown between a prompt sheet's message and its buttons.
-#[derive(Clone, Debug, Default)]
-pub struct PromptChoices {
-    pub picker: Option<PromptPicker>,
-    pub checkboxes: Vec<PromptCheckbox>,
-}
-
-/// A labelled pop-up menu and the item selected first.
-#[derive(Clone, Debug)]
-pub struct PromptPicker {
-    pub label: String,
-    pub items: Vec<String>,
-    pub selected: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct PromptCheckbox {
-    pub label: String,
-    pub checked: bool,
-    pub enabled: bool,
-}
-
-/// What a prompt sheet was confirmed with.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PromptResponse {
-    pub prompt: String,
-    /// The picker's selected item, when the sheet had a picker.
-    pub picked: Option<usize>,
-    /// Each checkbox's final state, in order.
-    pub checked: Vec<bool>,
-}
+use super::{ADDITIONAL_PROMPT_LIMIT, PromptCheckbox, PromptChoices, PromptPicker, PromptResponse};
 
 /// A native prompt sheet. Dropping it dismisses the sheet as a cancellation.
 #[derive(Debug)]
@@ -430,8 +398,13 @@ impl PromptState {
 /// Confirms an action with `choices`, optionally expanding a plain-text prompt
 /// in the same sheet. Only the confirmation button returns `Some`, including
 /// an empty prompt.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Native prompt fields and GPUI context"
+)]
 pub fn confirm_with_prompt(
-    window: &gpui::Window,
+    window: &mut gpui::Window,
+    _cx: &mut gpui::App,
     title: &str,
     message: &str,
     confirm_label: &str,

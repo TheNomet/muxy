@@ -708,3 +708,23 @@ fn new_worktree_shortcut_skips_a_folder_git_reports_is_not_a_repository(cx: &mut
         assert_eq!(model.new_worktree_target(), None);
     });
 }
+
+#[gpui::test]
+fn new_worktree_form_stays_closed_when_the_parent_is_no_longer_a_repository(
+    cx: &mut TestAppContext,
+) {
+    let (mut state, root, [worktree, ..], _directory) = pruning_fixture();
+    state.select_project(worktree).expect("worktree");
+    let (boot, _) = stub_boot(state);
+    cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
+    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
+    view.update(cx, |model, _| {
+        model.git.projects.entry(root).or_default().loaded = true;
+    });
+    cx.simulate_keystrokes("cmd-alt-n");
+    view.update(cx, |model, cx| {
+        assert!(model.overlay.is_none(), "the shortcut opens no form");
+        model.open_git_form(root, true, cx);
+        assert!(model.overlay.is_none(), "the sidebar row opens no form");
+    });
+}

@@ -11,6 +11,7 @@ use muxy_app_core::{
     PaneContent, PaneId, Tab,
     webview::{ModalOptions, ModalResult, WebviewDescriptor},
 };
+use muxy_core::capability::Feature;
 use muxy_ui::webview::assets::Source;
 use serde_json::{Value, json};
 
@@ -382,6 +383,7 @@ impl AppModel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<Surface, String> {
+        self.capabilities.check(Feature::ExtensionWebviews)?;
         let view = Webview::create(
             Page {
                 source,
@@ -432,6 +434,7 @@ impl AppModel {
         singleton: bool,
         cx: &mut Context<Self>,
     ) -> Result<PaneId, String> {
+        self.capabilities.check(Feature::ExtensionWebviews)?;
         let registered = self
             .webviews
             .registered
@@ -1149,7 +1152,9 @@ impl AppModel {
                 } else {
                     "puzzlepiece.extension".into()
                 };
-                muxy_ui::components::SymbolGlyph::new(symbol, size, foreground).into_any_element()
+                muxy_ui::components::SymbolGlyph::new(symbol, size, foreground)
+                    .or("puzzlepiece.extension")
+                    .into_any_element()
             },
         )
     }

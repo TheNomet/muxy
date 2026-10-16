@@ -49,11 +49,14 @@ pub(crate) struct Composer {
     voice: Option<muxy_ui::voice::Recorder>,
     voice_snapshot: muxy_ui::voice::Snapshot,
     voice_poll: Option<Task<()>>,
+    /// Whether dictation can run, from the app's capability table.
+    pub(crate) dictation: muxy_core::capability::Capability,
     pub(crate) workspace_inset: f32,
     pub(crate) context_label: String,
     floating_dimensions: Option<gpui::Size<gpui::Pixels>>,
     size_motion: Option<layout::SizeMotion>,
-    pub(crate) menu_anchor: std::rc::Rc<std::cell::Cell<gpui::Point<gpui::Pixels>>>,
+    /// Where the button that opens the menu was last drawn.
+    pub(crate) menu_anchor: std::rc::Rc<std::cell::Cell<gpui::Bounds<gpui::Pixels>>>,
     pub(crate) visibility: muxy_ui::motion::VisibilityMotion,
     input_style: InputStyle,
     floating_resize: Option<(
@@ -81,7 +84,7 @@ impl Composer {
                 .with_placeholder_key(tr_key!("Type or speak…"))
                 .with_placeholder_font(".SystemUIFont")
                 .with_paste_delegate(move |_, cx| {
-                    let content = muxy_ui::pasteboard::read_content();
+                    let content = muxy_ui::pasteboard::read_content(cx);
                     if matches!(content, Ok(muxy_ui::pasteboard::Content::Text)) {
                         return false;
                     }
@@ -125,6 +128,7 @@ impl Composer {
             voice: None,
             voice_snapshot: muxy_ui::voice::Snapshot::default(),
             voice_poll: None,
+            dictation: muxy_core::capability::Capability::Supported,
             workspace_inset: 0.0,
             context_label: String::new(),
             floating_resize: None,
@@ -204,9 +208,9 @@ impl Composer {
                 .all_font_names()
                 .contains(&self.settings.font_family)
         {
-            ".AppleSystemUIFontMonospaced".to_owned()
+            muxy_ui::font::monospace()
         } else {
-            self.settings.font_family.clone()
+            self.settings.font_family.clone().into()
         };
         let font = gpui::font(family.clone());
         let id = cx.text_system().resolve_font(&font);
@@ -221,7 +225,7 @@ impl Composer {
         self.input_style = style;
         self.input.update(cx, |input, cx| {
             input.set_style(style, cx);
-            input.set_font_family(Some(family.into()), cx);
+            input.set_font_family(Some(family), cx);
         });
         cx.notify();
     }
@@ -255,7 +259,10 @@ impl Composer {
             return;
         }
         if let Some(recorder) = &self.voice {
-            if self.voice_snapshot.phase == muxy_ui::voice::Phase::Starting {
+            if matches!(
+                self.voice_snapshot.phase,
+                muxy_ui::voice::Phase::Starting | muxy_ui::voice::Phase::Transcribing
+            ) {
                 self.voice = None;
                 self.voice_poll = None;
             } else {
@@ -264,8 +271,16 @@ impl Composer {
             cx.notify();
             return;
         }
+        if let Some(reason) = self.dictation.reason(muxy_core::capability::Feature::Voice) {
+            self.error = Some(reason.into_owned());
+            cx.notify();
+            return;
+        }
         self.error = None;
-        match muxy_ui::voice::Recorder::start(self.settings.language.clone()) {
+        match muxy_ui::voice::Recorder::start(
+            self.settings.language.clone(),
+            self.settings.voice_model.clone(),
+        ) {
             Ok(recorder) => self.record(recorder, cx),
             Err(error) => {
                 self.error = Some(error);
@@ -326,6 +341,9 @@ impl Composer {
     }
 
     pub(crate) fn pause_voice(&mut self, cx: &mut Context<Self>) {
+        if self.voice_snapshot.phase == muxy_ui::voice::Phase::Transcribing {
+            return;
+        }
         if let Some(voice) = &self.voice {
             voice.pause(self.voice_snapshot.phase != muxy_ui::voice::Phase::Paused);
         }

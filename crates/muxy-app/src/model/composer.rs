@@ -19,6 +19,7 @@ use muxy_app_core::{
         },
     },
 };
+use muxy_core::capability::Feature;
 use muxy_protocol::{ChannelId, Modes};
 use muxy_ui::panel::PanelId;
 use muxy_ui::tr;
@@ -124,6 +125,7 @@ impl AppModel {
         view.update(cx, |view, _| {
             view.error = error;
             view.sending = self.composer.submission.is_some();
+            view.dictation = self.capabilities.get(Feature::Voice).clone();
         });
         self.place_composer_panel(&view, cx);
         self.composer.subscription = Some(cx.subscribe(&view, |model, _, event, cx| match event {
@@ -167,6 +169,7 @@ impl AppModel {
     }
 
     pub(super) fn dismiss_composer(&mut self, clear: bool, cx: &mut Context<Self>) {
+        self.close_composer_menu(cx);
         if let Some(view) = &self.composer.view {
             view.update(cx, Composer::cancel_voice);
         }
@@ -532,14 +535,19 @@ impl AppModel {
             return;
         };
         let choices = view.read(cx).menu_items();
-        let anchor = view.read(cx).menu_anchor.get();
-        let Ok(receiver) = self.window.update(cx, |_, window, _| {
+        let button = view.read(cx).menu_anchor.get();
+        let Ok(shown) = self.window.update(cx, |_, window, cx| {
             muxy_ui::native_menu::show(
                 choices.iter().map(|(item, _)| item.clone()).collect(),
-                anchor,
+                gpui::point(button.left(), button.bottom() + gpui::px(1.0)),
                 window,
+                cx,
             )
         }) else {
+            return;
+        };
+        let Some(receiver) = shown else {
+            self.open_composer_menu(&choices, button, cx);
             return;
         };
         let view = view.downgrade();
@@ -561,6 +569,67 @@ impl AppModel {
             });
         })
         .detach();
+    }
+}
+
+impl AppModel {
+    /// Closes the composer's menu with the composer, and leaves the keyboard
+    /// to the pane rather than to a composer on its way out.
+    fn close_composer_menu(&mut self, cx: &mut Context<Self>) {
+        use crate::views::{menu::Command, overlays::Overlay};
+
+        if let Some(Overlay::Menu(menu)) = &self.overlay
+            && menu
+                .items
+                .iter()
+                .any(|item| matches!(item.command(), Some(Command::Composer(..))))
+        {
+            self.dismiss_overlay(cx);
+        }
+        self.focus_return = None;
+    }
+
+    /// The composer's menu, drawn by the app where the system pops up none.
+    pub(super) fn open_composer_menu(
+        &mut self,
+        choices: &[(
+            muxy_ui::native_menu::Item,
+            crate::views::composer::menu::Command,
+        )],
+        button: gpui::Bounds<gpui::Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::views::menu::{Command, Item, Menu};
+
+        let Some(view) = &self.composer.view else {
+            return;
+        };
+        let composer = view.entity_id();
+        let items = choices
+            .iter()
+            .map(|(choice, command)| {
+                let mut item =
+                    Item::action(choice.label.clone(), Command::Composer(composer, *command));
+                if choice.checked {
+                    item = item.checked_if(true);
+                }
+                if !choice.enabled {
+                    item = item.disabled();
+                }
+                if choice.separator {
+                    item = item.separated();
+                }
+                item
+            })
+            .collect();
+        let mut menu = Menu::new(items, button.bottom_left());
+        menu.drops_from = Some(button);
+        menu.returns_focus_to = Some(view.focus_handle(cx).downgrade());
+        self.overlay_subscription = None;
+        self.overlay = Some(crate::views::overlays::Overlay::Menu(menu));
+        let focus = self.overlay_focus.clone();
+        let _ = self.window.update(cx, |_, window, _| focus.focus(window));
+        cx.notify();
     }
 }
 
@@ -741,10 +810,19 @@ impl AppModel {
             file_paths: composer.draft.file_attachments.clone(),
             image_attachments: composer.draft.image_attachments.clone(),
             append_return: enter,
-            image_strategy: composer.settings.image_strategy,
+            image_strategy: self.image_strategy(composer.settings.image_strategy),
             target_pane_ids: targets.iter().map(|(id, _, _)| id.to_string()).collect(),
         });
         (!plan.is_empty()).then_some((revision, plan))
+    }
+
+    /// The stored strategy, or inline paths while clipboard submission cannot run here.
+    fn image_strategy(&self, stored: ImageSubmissionStrategy) -> ImageSubmissionStrategy {
+        if self.supports(Feature::ClipboardImages) {
+            stored
+        } else {
+            ImageSubmissionStrategy::InlinePath
+        }
     }
 
     fn submit_composer(&mut self, enter: bool, cx: &mut Context<Self>) {

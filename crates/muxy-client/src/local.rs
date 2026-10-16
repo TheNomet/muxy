@@ -7,9 +7,9 @@ pub mod bundle;
 pub mod host;
 
 use crate::{Client, ClientError};
+use muxy_core::file_lock::FileLock;
 use muxy_protocol::transport::ByteStream;
 use std::ffi::OsString;
-use std::fs::File;
 use std::io;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -137,7 +137,7 @@ pub fn unavailable(error: &ClientError) -> bool {
     matches!(error, ClientError::Io(error) if matches!(error.kind(), io::ErrorKind::ConnectionRefused | io::ErrorKind::NotFound))
 }
 
-fn wait_for_startup_lock(socket: &Path) -> io::Result<File> {
+fn wait_for_startup_lock(socket: &Path) -> io::Result<FileLock> {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
         match lock_startup(socket) {
@@ -151,7 +151,7 @@ fn wait_for_startup_lock(socket: &Path) -> io::Result<File> {
     }
 }
 
-pub fn lock_startup(socket: &Path) -> io::Result<File> {
+pub fn lock_startup(socket: &Path) -> io::Result<FileLock> {
     if let Some(parent) = socket.parent() {
         std::fs::create_dir_all(parent)?;
     }

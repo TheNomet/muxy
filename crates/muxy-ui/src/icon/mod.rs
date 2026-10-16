@@ -1,11 +1,11 @@
-#[cfg(target_os = "macos")]
 mod raster;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod sfsymbol;
 
+pub use raster::tinted_svg;
 #[cfg(target_os = "macos")]
-pub use raster::{tinted, tinted_svg, tinted_symbol, tinted_symbol_weight};
+pub use raster::{tinted, tinted_symbol, tinted_symbol_weight};
 
 use gpui::SharedString;
 
@@ -32,7 +32,6 @@ pub enum Icon {
     Columns,
     Cpu,
     Ellipsis,
-    ExternalLink,
     Folder,
     GitBranch,
     Globe,
@@ -61,6 +60,43 @@ pub enum Icon {
     TerminalStack,
     Trash,
     X,
+    Book,
+    Checklist,
+    CircleDashed,
+    Dashboard,
+    Database,
+    Dollar,
+    ExternalLink,
+    Filter,
+    Gauge,
+    History,
+    Info,
+    LogOut,
+    PlaySquare,
+    Refresh,
+    Sliders,
+    Sparkles,
+    Timer,
+    Tower,
+    ArrowDownCircle,
+    ArrowUpCircle,
+    ChevronsUpDown,
+    Circle,
+    CircleAlert,
+    CircleCheck,
+    Clock,
+    File,
+    GitMerge,
+    GitPullRequest,
+    Mic,
+    OctagonX,
+    Overlap,
+    Pause,
+    Pencil,
+    Play,
+    Quote,
+    Stop,
+    TriangleAlert,
 }
 
 impl Icon {
@@ -86,7 +122,6 @@ impl Icon {
             Self::Columns => "columns-2",
             Self::Cpu => "cpu",
             Self::Ellipsis => "ellipsis",
-            Self::ExternalLink => "external-link",
             Self::Folder => "folder",
             Self::GitBranch => "git-branch",
             Self::Globe => "globe",
@@ -107,7 +142,7 @@ impl Icon {
             Self::Plus => "plus",
             Self::Puzzle => "puzzle",
             Self::Restore => "restore",
-            Self::RotateCw => "rotate-cw",
+            Self::RotateCw | Self::Refresh => "rotate-cw",
             Self::Rows => "rows-2",
             Self::Search => "search",
             Self::Settings => "settings",
@@ -115,14 +150,53 @@ impl Icon {
             Self::Terminal => "terminal",
             Self::Trash => "trash",
             Self::X => "x",
+            Self::Book => "book-text",
+            Self::Checklist => "list-checks",
+            Self::CircleDashed => "circle-dashed",
+            Self::Dashboard => "layout-dashboard",
+            Self::Database => "database",
+            Self::Dollar => "circle-dollar-sign",
+            Self::ExternalLink => "square-arrow-out-up-right",
+            Self::Filter => "list-filter",
+            Self::Gauge => "gauge",
+            Self::History => "history",
+            Self::Info => "info",
+            Self::LogOut => "log-out",
+            Self::PlaySquare => "square-play",
+
+            Self::Sliders => "sliders-horizontal",
+            Self::Sparkles => "sparkles",
+            Self::Timer => "timer",
+            Self::Tower => "radio-tower",
+            Self::ArrowDownCircle => "circle-arrow-down",
+            Self::ArrowUpCircle => "circle-arrow-up",
+            Self::ChevronsUpDown => "chevrons-up-down",
+            Self::Circle => "circle",
+            Self::CircleAlert => "circle-alert",
+            Self::CircleCheck => "circle-check",
+            Self::Clock => "clock",
+            Self::File => "file",
+            Self::GitMerge => "git-merge",
+            Self::GitPullRequest => "git-pull-request",
+            Self::Mic => "mic",
+            Self::OctagonX => "octagon-x",
+            Self::Overlap => "copy",
+            Self::Pause => "pause",
+            Self::Pencil => "pencil",
+            Self::Play => "play",
+            Self::Quote => "text-quote",
+            Self::Stop => "square",
+            Self::TriangleAlert => "triangle-alert",
         };
         SharedString::from(format!("icons/{name}.svg"))
     }
 
+    /// The bundled icon that stands in for an SF Symbol. A filled symbol is
+    /// drawn as its outline.
     pub fn from_symbol(symbol: &str) -> Option<Self> {
-        Some(match symbol {
-            "house.fill" | "house" => Self::House,
-            "folder" | "folder.fill" => Self::Folder,
+        Some(match symbol.strip_suffix(".fill").unwrap_or(symbol) {
+            "house" => Self::House,
+            "folder" => Self::Folder,
             "arrow.triangle.branch" => Self::GitBranch,
             "network" => Self::Network,
             "bell" => Self::Bell,
@@ -139,7 +213,7 @@ impl Icon {
             "antenna.radiowaves.left.and.right.slash" => Self::BroadcastOff,
             "rectangle.bottomhalf.inset.filled" => Self::PanelBottom,
             "rectangle.righthalf.inset.filled" => Self::PanelRight,
-            "pin.fill" | "pin" => Self::Pin,
+            "pin" => Self::Pin,
             "pin.slash" => Self::PinOff,
             "terminal" => Self::Terminal,
             "archivebox" => Self::Archive,
@@ -154,8 +228,7 @@ impl Icon {
             "square.split.2x1" => Self::Columns,
             "square.split.1x2" => Self::Rows,
             "globe" => Self::Globe,
-            "arrow.clockwise" => Self::RotateCw,
-            "arrow.up.forward.app" => Self::ExternalLink,
+            "arrow.up.forward.app" | "arrow.up.right.square" => Self::ExternalLink,
             "person.crop.circle" => Self::CircleUser,
             "sidebar.left" => Self::PanelLeft,
             "arrow.up.arrow.down" => Self::ArrowUpDown,
@@ -165,6 +238,43 @@ impl Icon {
             "chevron.right" => Self::ChevronRight,
             "chevron.up" => Self::ChevronUp,
             "checkmark" => Self::Check,
+            "text.book.closed" => Self::Book,
+            "checklist" => Self::Checklist,
+            "circle.dashed" => Self::CircleDashed,
+            "rectangle.3.group" => Self::Dashboard,
+            "cylinder.split.1x2" => Self::Database,
+            "dollarsign.circle" => Self::Dollar,
+            "line.3.horizontal.decrease" => Self::Filter,
+            "gauge.with.dots.needle.33percent" => Self::Gauge,
+            "clock.arrow.circlepath" => Self::History,
+            "info.circle" => Self::Info,
+            "rectangle.portrait.and.arrow.right" => Self::LogOut,
+            "play.rectangle" | "play.rectangle.on.rectangle" => Self::PlaySquare,
+            "arrow.clockwise" => Self::Refresh,
+            "slider.horizontal.3" => Self::Sliders,
+            "sparkles" => Self::Sparkles,
+            "timer" => Self::Timer,
+            "tower.broadcast" | "antenna.radiowaves.left.and.right" => Self::Tower,
+            "xmark.circle" => Self::CircleX,
+            "arrow.down.circle" => Self::ArrowDownCircle,
+            "arrow.up.circle" => Self::ArrowUpCircle,
+            "chevron.up.chevron.down" => Self::ChevronsUpDown,
+            "circle" => Self::Circle,
+            "exclamationmark.circle" => Self::CircleAlert,
+            "checkmark.circle" => Self::CircleCheck,
+            "clock" => Self::Clock,
+            "doc" | "doc.text" => Self::File,
+            "arrow.triangle.merge" => Self::GitMerge,
+            "arrow.triangle.pull" => Self::GitPullRequest,
+            "mic" => Self::Mic,
+            "xmark.octagon" => Self::OctagonX,
+            "rectangle.on.rectangle" => Self::Overlap,
+            "pause" => Self::Pause,
+            "pencil" | "pencil.circle" => Self::Pencil,
+            "play" => Self::Play,
+            "text.quote" => Self::Quote,
+            "stop" => Self::Stop,
+            "exclamationmark.triangle" => Self::TriangleAlert,
             _ => return None,
         })
     }
@@ -194,7 +304,6 @@ impl Icon {
             Self::Columns => "square.split.2x1",
             Self::Cpu => "cpu",
             Self::Ellipsis => "ellipsis",
-            Self::ExternalLink => "arrow.up.forward.app",
             Self::Folder => "folder",
             Self::GitBranch => "arrow.triangle.branch",
             Self::Globe => "globe",
@@ -215,7 +324,7 @@ impl Icon {
             Self::Plus => "plus",
             Self::Puzzle => "puzzlepiece.extension",
             Self::Restore => "arrow.down.right.and.arrow.up.left",
-            Self::RotateCw => "arrow.clockwise",
+            Self::RotateCw | Self::Refresh => "arrow.clockwise",
             Self::Rows => "square.split.1x2",
             Self::Search => "magnifyingglass",
             Self::Settings => "gearshape",
@@ -223,6 +332,160 @@ impl Icon {
             Self::Terminal => "terminal",
             Self::Trash => "trash",
             Self::X => "xmark",
+            Self::Book => "text.book.closed",
+            Self::Checklist => "checklist",
+            Self::CircleDashed => "circle.dashed",
+            Self::Dashboard => "rectangle.3.group",
+            Self::Database => "cylinder.split.1x2",
+            Self::Dollar => "dollarsign.circle",
+            Self::ExternalLink => "arrow.up.right.square",
+            Self::Filter => "line.3.horizontal.decrease",
+            Self::Gauge => "gauge.with.dots.needle.33percent",
+            Self::History => "clock.arrow.circlepath",
+            Self::Info => "info.circle",
+            Self::LogOut => "rectangle.portrait.and.arrow.right",
+            Self::PlaySquare => "play.rectangle",
+
+            Self::Sliders => "slider.horizontal.3",
+            Self::Sparkles => "sparkles",
+            Self::Timer => "timer",
+            Self::Tower => "tower.broadcast",
+            Self::ArrowDownCircle => "arrow.down.circle",
+            Self::ArrowUpCircle => "arrow.up.circle",
+            Self::ChevronsUpDown => "chevron.up.chevron.down",
+            Self::Circle => "circle.fill",
+            Self::CircleAlert => "exclamationmark.circle.fill",
+            Self::CircleCheck => "checkmark.circle.fill",
+            Self::Clock => "clock",
+            Self::File => "doc",
+            Self::GitMerge => "arrow.triangle.merge",
+            Self::GitPullRequest => "arrow.triangle.pull",
+            Self::Mic => "mic",
+            Self::OctagonX => "xmark.octagon.fill",
+            Self::Overlap => "rectangle.on.rectangle",
+            Self::Pause => "pause.fill",
+            Self::Pencil => "pencil",
+            Self::Play => "play.fill",
+            Self::Quote => "text.quote",
+            Self::Stop => "stop.fill",
+            Self::TriangleAlert => "exclamationmark.triangle.fill",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Icon;
+    use gpui::AssetSource;
+
+    /// What the extensions in the official repository name in their manifests.
+    const DECLARED: [&str; 25] = [
+        "antenna.radiowaves.left.and.right",
+        "arrow.clockwise",
+        "arrow.triangle.branch",
+        "arrow.up.right.square",
+        "checklist",
+        "circle.dashed",
+        "clock.arrow.circlepath",
+        "cylinder.split.1x2",
+        "dollarsign.circle",
+        "folder",
+        "gauge.with.dots.needle.33percent",
+        "globe",
+        "info.circle",
+        "line.3.horizontal.decrease",
+        "paintpalette",
+        "play.rectangle.on.rectangle",
+        "rectangle.3.group",
+        "rectangle.portrait.and.arrow.right",
+        "slider.horizontal.3",
+        "sparkles",
+        "terminal",
+        "text.book.closed",
+        "timer",
+        "tower.broadcast",
+        "trash",
+    ];
+
+    /// What the app's own views name, the project icon picker aside.
+    const DRAWN: [&str; 46] = [
+        "antenna.radiowaves.left.and.right.slash",
+        "arrow.clockwise",
+        "arrow.down.circle",
+        "arrow.down.right.and.arrow.up.left",
+        "arrow.triangle.merge",
+        "arrow.triangle.pull",
+        "arrow.up",
+        "arrow.up.circle",
+        "arrow.up.left.and.arrow.down.right",
+        "arrow.up.right.square",
+        "checkmark",
+        "checkmark.circle.fill",
+        "chevron.down",
+        "chevron.left",
+        "chevron.right",
+        "chevron.up.chevron.down",
+        "circle.fill",
+        "clock",
+        "doc",
+        "dot.radiowaves.left.and.right",
+        "ellipsis",
+        "exclamationmark.circle.fill",
+        "exclamationmark.triangle.fill",
+        "house.fill",
+        "keyboard",
+        "magnifyingglass",
+        "mic",
+        "pause.fill",
+        "pencil.circle",
+        "pin",
+        "pin.fill",
+        "pin.slash",
+        "play.fill",
+        "plus",
+        "puzzlepiece.extension",
+        "puzzlepiece.extension.fill",
+        "rectangle.bottomhalf.inset.filled",
+        "rectangle.on.rectangle",
+        "rectangle.righthalf.inset.filled",
+        "sparkles",
+        "stop.fill",
+        "terminal",
+        "text.quote",
+        "xmark",
+        "xmark.circle",
+        "xmark.octagon.fill",
+    ];
+
+    fn bundled(symbol: &str) -> bool {
+        Icon::from_symbol(symbol).is_some_and(|icon| {
+            crate::assets::Assets
+                .load(&icon.path())
+                .is_ok_and(|bytes| bytes.is_some())
+        })
+    }
+
+    #[test]
+    fn the_symbols_official_extensions_declare_have_bundled_icons() {
+        for symbol in DECLARED {
+            assert!(bundled(symbol), "{symbol}");
+        }
+    }
+
+    #[test]
+    fn the_symbols_the_app_draws_have_bundled_icons() {
+        for symbol in DRAWN {
+            assert!(bundled(symbol), "{symbol}");
+        }
+    }
+
+    #[test]
+    fn a_filled_symbol_is_drawn_as_its_outline() {
+        assert_eq!(
+            Icon::from_symbol("puzzlepiece.extension.fill"),
+            Some(Icon::Puzzle)
+        );
+        assert_eq!(Icon::from_symbol("pin.fill"), Some(Icon::Pin));
+        assert_eq!(Icon::from_symbol("no.such.symbol.fill"), None);
     }
 }

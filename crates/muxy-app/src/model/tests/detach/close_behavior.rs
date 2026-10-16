@@ -26,7 +26,11 @@ fn configured_close_detaches_a_whole_split_tab_or_only_the_shortcut_pane(cx: &mu
                 model.close_tab(model.active_tab().expect("tab"), cx);
             });
         } else {
-            cx.simulate_keystrokes("cmd-w");
+            cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+                "cmd-w"
+            } else {
+                "ctrl-shift-w"
+            });
         }
         view.read_with(cx, |model, _| {
             assert_eq!(model.state.home().tabs.is_empty(), whole_tab);

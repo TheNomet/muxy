@@ -1,6 +1,7 @@
 use gpui::Context;
 use muxy_app_core::extensions::Action;
 use muxy_app_core::settings::KeyChord;
+use muxy_core::capability::Feature;
 use muxy_core::shortcuts::ShortcutSettings;
 use muxy_ui::command_palette::{Command, Registry};
 use muxy_ui::l10n::tr_key;
@@ -192,7 +193,11 @@ impl AppModel {
         let bindings = self.extension_bindings();
         for extension in self.extensions.registry.active() {
             for command in &extension.manifest.commands {
-                if matches!(command.action, Action::OpenPopover { .. }) {
+                if matches!(command.action, Action::OpenPopover { .. })
+                    || !action_features(&command.action)
+                        .iter()
+                        .any(|feature| self.capabilities.has_backend(*feature))
+                {
                     continue;
                 }
                 let owner = extension.name.clone();
@@ -230,5 +235,33 @@ impl AppModel {
             Command::new("extensions.manage", tr!("Manage Extensions"), manage)
                 .keywords(tr_key!("Manage Extensions")),
         );
+    }
+}
+
+/// The backends an extension command's action reaches. It does nothing unless one can run.
+fn action_features(action: &Action) -> &'static [Feature] {
+    match action {
+        Action::Event => &[Feature::ExtensionScripts, Feature::ExtensionWebviews],
+        Action::RunScript { .. } => &[Feature::ExtensionScripts],
+        Action::OpenTab { .. }
+        | Action::TogglePanel { .. }
+        | Action::OpenPopover { .. }
+        | Action::OpenModal { .. } => &[Feature::ExtensionWebviews],
+    }
+}
+
+impl AppModel {
+    /// Why an extension command's action cannot run here, when no backend it reaches can.
+    pub(super) fn extension_action_reason(
+        &self,
+        action: &Action,
+    ) -> Option<std::borrow::Cow<'static, str>> {
+        let features = action_features(action);
+        if features.iter().any(|feature| self.supports(*feature)) {
+            return None;
+        }
+        features
+            .first()
+            .and_then(|feature| self.capabilities.reason(*feature))
     }
 }

@@ -1,6 +1,7 @@
 use gpui::{AppContext, Context, Focusable, Window};
 use muxy_app_core::extensions::{Action, Extension};
 use muxy_app_core::modal::{ModalItem, ModalOptions, ModalToken};
+use muxy_core::capability::Feature;
 use muxy_protocol::ProjectId;
 use muxy_ui::javascript::{Event, Script};
 use muxy_ui::tr;
@@ -74,6 +75,11 @@ impl AppModel {
             }
             return;
         };
+        if let Some(reason) = self.extension_action_reason(&command.action) {
+            self.extension_log(owner, format!("[muxy] command {id} failed: {reason}"));
+            self.fail(reason.into_owned(), cx);
+            return;
+        }
         if let Some(permission) = command.action.permission()
             && !extension.allows(permission)
         {
@@ -143,6 +149,7 @@ impl AppModel {
         path: &str,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
+        self.capabilities.check(Feature::ExtensionScripts)?;
         if self.extensions.scripts.len() + self.extensions.loading_scripts >= 16 {
             return Err(
                 tr!("too many active extension scripts; reload extensions to stop them").into(),
@@ -191,6 +198,7 @@ impl AppModel {
         source: String,
         cx: &mut Context<Self>,
     ) -> Result<u64, String> {
+        self.capabilities.check(Feature::ExtensionScripts)?;
         let (script, events) = Script::start(source).map_err(|e| e.to_string())?;
         self.extensions.next += 1;
         let id = self.extensions.next;

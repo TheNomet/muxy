@@ -33,6 +33,9 @@ brew install --cask muxy-app/tap/muxy
 
 Or download the DMG for your Mac from the [latest release](https://github.com/muxy-app/muxy/releases/latest).
 
+Experimental [Linux desktop packages](docs/user-guide/linux.md) target Ubuntu
+24.04 on x86_64 and ARM64, with separate stable/beta installs and in-app updates.
+
 The `muxy` CLI and server also run on their own, on macOS and Linux:
 
 ```bash

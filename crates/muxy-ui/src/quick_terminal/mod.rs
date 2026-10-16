@@ -19,7 +19,13 @@ pub enum ShortcutRecordingEvent {
 
 #[derive(Debug)]
 pub struct ShortcutRecording {
-    _native: platform::ShortcutRecorder,
+    native: platform::ShortcutRecorder,
+}
+
+impl ShortcutRecording {
+    pub fn record(&self, keystroke: &gpui::Keystroke) -> bool {
+        platform::record(&self.native, keystroke)
+    }
 }
 
 #[derive(Debug)]
@@ -47,7 +53,7 @@ pub fn shortcut_recording_action(
 
 pub fn start_shortcut_recording()
 -> Result<(ShortcutRecording, Receiver<ShortcutRecordingEvent>), String> {
-    let (sender, receiver) = async_channel::unbounded();
+    let (sender, receiver) = async_channel::bounded(1);
     let native = platform::start_shortcut_recorder(sender)?;
-    Ok((ShortcutRecording { _native: native }, receiver))
+    Ok((ShortcutRecording { native }, receiver))
 }

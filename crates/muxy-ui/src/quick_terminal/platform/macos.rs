@@ -52,6 +52,9 @@ impl Drop for SystemObserver {
     }
 }
 
+pub const CAPABILITY: muxy_core::capability::Capability =
+    muxy_core::capability::Capability::Supported;
+
 #[derive(Debug)]
 pub struct SystemObservers {
     _observers: Vec<SystemObserver>,
@@ -577,6 +580,11 @@ impl PanelAdapter {
 
     pub fn is_key(&self) -> bool {
         self.window.isKeyWindow()
+    }
+
+    #[allow(clippy::unused_self, reason = "Shared panel backend interface")]
+    pub fn is_active(&self, active: bool) -> bool {
+        active
     }
 
     pub fn native_frame(&self) -> Rect {

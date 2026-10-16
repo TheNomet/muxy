@@ -1,129 +1,153 @@
 //! Native delivery only; notification history and policy belong to callers.
-use std::collections::HashSet;
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(any(test, feature = "test-support"))]
 use std::sync::{Arc, Mutex, PoisonError};
 
-use async_channel::{Receiver, Sender};
-use block2::{DynBlock, RcBlock};
-use objc2::rc::Retained;
-use objc2::runtime::{Bool, ProtocolObject};
-use objc2::{AnyThread, DefinedClass, define_class, msg_send};
-use objc2_foundation::{NSArray, NSBundle, NSError, NSObject, NSObjectProtocol, NSString};
-use objc2_user_notifications::{
-    UNAuthorizationOptions, UNMutableNotificationContent, UNNotification,
-    UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse,
-    UNNotificationSound, UNUserNotificationCenter, UNUserNotificationCenterDelegate,
-};
+use async_channel::Receiver;
+#[cfg(any(test, feature = "test-support"))]
+use async_channel::Sender;
+use muxy_core::capability::Capability;
 
-define_class!(
-    #[unsafe(super(NSObject))]
-    #[name = "MuxyNotificationDelegate"]
-    #[ivars = Sender<String>]
-    #[derive(Debug)]
-    struct Delegate;
+#[cfg(target_os = "linux")]
+pub use linux::CAPABILITY;
+#[cfg(target_os = "linux")]
+use linux::Service;
+#[cfg(target_os = "macos")]
+pub use macos::CAPABILITY;
+#[cfg(target_os = "macos")]
+use macos::Service;
 
-    unsafe impl NSObjectProtocol for Delegate {}
-
-    unsafe impl UNUserNotificationCenterDelegate for Delegate {
-        #[unsafe(method(userNotificationCenter:willPresentNotification:withCompletionHandler:))]
-        fn present(&self, _: &UNUserNotificationCenter, _: &UNNotification, completion: &DynBlock<dyn Fn(UNNotificationPresentationOptions)>) {
-            completion.call((UNNotificationPresentationOptions::Banner | UNNotificationPresentationOptions::Sound,));
-        }
-
-        #[unsafe(method(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:))]
-        fn respond(&self, _: &UNUserNotificationCenter, response: &UNNotificationResponse, completion: &DynBlock<dyn Fn()>) {
-            let _ = self.ivars().try_send(response.notification().request().identifier().to_string());
-            completion.call(());
-        }
-    }
-);
+/// What a notification service reports while it runs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Event {
+    /// The user opened the notification with this identifier.
+    Opened(String),
+    /// What the system lets the service do changed.
+    Capability(Capability),
+}
 
 #[derive(Debug)]
-pub struct Notifications {
-    center: Retained<UNUserNotificationCenter>,
-    _delegate: Retained<Delegate>,
-    pending: Arc<PendingDeliveries>,
+enum Backend {
+    Native(Service),
+    #[cfg(any(test, feature = "test-support"))]
+    Simulated(SimulatedNotifications),
+    Absent(Capability),
 }
 
-#[derive(Debug, Default)]
-struct PendingDeliveries(Mutex<HashSet<String>>);
+#[derive(Debug)]
+pub struct Notifications(Backend);
 
-impl PendingDeliveries {
-    fn register(&self, id: String) {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id);
+impl Notifications {
+    /// Starts the platform's notification service, and the events it reports.
+    pub fn start() -> (Self, Receiver<Event>) {
+        match Service::start() {
+            Ok((service, events)) => (Self(Backend::Native(service)), events),
+            Err(capability) => {
+                let (_, events) = async_channel::bounded(1);
+                (Self(Backend::Absent(capability)), events)
+            }
+        }
     }
 
-    fn cancel(&self, ids: &[String], clear: impl FnOnce()) {
-        let mut pending = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        pending.retain(|id| !ids.contains(id));
-        clear();
+    /// A service with no backend, for tests that must not reach the desktop.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn absent() -> (Self, Receiver<Event>) {
+        let (_, events) = async_channel::bounded(1);
+        (Self(Backend::Absent(Capability::Unsupported)), events)
     }
 
-    fn authorized(&self, id: &str, granted: bool, submit: impl FnOnce()) {
-        let mut pending = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if pending.remove(id) && granted {
-            submit();
+    /// Whether a notification delivered now would reach the user.
+    pub fn capability(&self) -> Capability {
+        match &self.0 {
+            Backend::Native(service) => service.capability(),
+            #[cfg(any(test, feature = "test-support"))]
+            Backend::Simulated(_) => Capability::Supported,
+            Backend::Absent(capability) => capability.clone(),
+        }
+    }
+
+    /// Asks the service what the system lets it do now. A change arrives as
+    /// an [`Event::Capability`].
+    pub fn refresh(&self) {
+        if let Backend::Native(service) = &self.0 {
+            service.refresh();
+        }
+    }
+
+    /// Shows a notification that opens something in the app: an
+    /// [`Event::Opened`] follows when the user opens it.
+    pub fn deliver(&self, id: &str, title: &str, body: &str) {
+        match &self.0 {
+            Backend::Native(service) => service.deliver(id, title, body),
+            #[cfg(any(test, feature = "test-support"))]
+            Backend::Simulated(simulated) => simulated.shown().push(id.to_owned()),
+            Backend::Absent(_) => {}
+        }
+    }
+
+    /// Shows a notification that only informs, with nothing for the user to open.
+    pub fn inform(&self, id: &str, title: &str, body: &str) {
+        match &self.0 {
+            Backend::Native(service) => service.inform(id, title, body),
+            #[cfg(any(test, feature = "test-support"))]
+            Backend::Simulated(simulated) => simulated.shown().push(id.to_owned()),
+            Backend::Absent(_) => {}
+        }
+    }
+
+    pub fn clear(&self, ids: &[String]) {
+        match &self.0 {
+            Backend::Native(service) => service.clear(ids),
+            #[cfg(any(test, feature = "test-support"))]
+            Backend::Simulated(simulated) => simulated.shown().retain(|id| !ids.contains(id)),
+            Backend::Absent(_) => {}
         }
     }
 }
 
-impl Notifications {
-    pub fn clear(&self, ids: &[String]) {
-        // Serialize cancellation with submission from the authorization callback.
-        self.pending.cancel(ids, || {
-            let ids: Vec<_> = ids.iter().map(|id| NSString::from_str(id)).collect();
-            let ids = NSArray::from_retained_slice(&ids);
-            self.center
-                .removePendingNotificationRequestsWithIdentifiers(&ids);
-            self.center
-                .removeDeliveredNotificationsWithIdentifiers(&ids);
-        });
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Debug)]
+pub struct SimulatedNotifications {
+    shown: Arc<Mutex<Vec<String>>>,
+    events: Sender<Event>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl SimulatedNotifications {
+    pub fn start() -> (Notifications, Receiver<Event>, Self) {
+        let (sender, events) = async_channel::bounded(32);
+        let simulated = Self {
+            shown: Arc::default(),
+            events: sender,
+        };
+        (
+            Notifications(Backend::Simulated(simulated.clone())),
+            events,
+            simulated,
+        )
     }
 
-    /// Unbundled binaries cannot use the macOS notification service.
-    pub fn new() -> Option<(Self, Receiver<String>)> {
-        NSBundle::mainBundle().bundleIdentifier()?;
-        let (sender, receiver) = async_channel::bounded(32);
-        let delegate = Delegate::alloc().set_ivars(sender);
-        // SAFETY: initialization of our NSObject subclass, with its ivars installed.
-        let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
-        let center = UNUserNotificationCenter::currentNotificationCenter();
-        center.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-        Some((
-            Self {
-                center,
-                _delegate: delegate,
-                pending: Arc::default(),
-            },
-            receiver,
-        ))
+    fn shown(&self) -> std::sync::MutexGuard<'_, Vec<String>> {
+        self.shown.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    pub fn deliver(&self, id: &str, title: &str, body: &str) {
-        let content = UNMutableNotificationContent::new();
-        content.setTitle(&NSString::from_str(title));
-        content.setBody(&NSString::from_str(body));
-        content.setSound(Some(&UNNotificationSound::defaultSound()));
-        let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
-            &NSString::from_str(id),
-            &content,
-            None,
-        );
-        let center = self.center.clone();
-        let id = id.to_owned();
-        let pending = Arc::clone(&self.pending);
-        pending.register(id.clone());
-        let completion = RcBlock::new(move |granted: Bool, _: *mut NSError| {
-            pending.authorized(&id, granted.as_bool(), || {
-                center.addNotificationRequest_withCompletionHandler(&request, None);
-            });
-        });
-        self.center
-            .requestAuthorizationWithOptions_completionHandler(
-                UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
-                &completion,
-            );
+    /// Identifiers delivered and not yet cleared, in delivery order.
+    pub fn visible(&self) -> Vec<String> {
+        self.shown().clone()
+    }
+
+    /// Acts as the user opening the notification `id`.
+    pub fn open(&self, id: &str) {
+        let _ = self.events.try_send(Event::Opened(id.to_owned()));
+    }
+
+    /// Acts as the system changing what the service may do.
+    pub fn report(&self, capability: Capability) {
+        let _ = self.events.try_send(Event::Capability(capability));
     }
 }

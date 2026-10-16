@@ -1,7 +1,9 @@
 use super::*;
-use crate::model::tests::{extensions::finish_extension, stub_boot};
+use crate::model::tests::extensions::finish_extension;
+use crate::model::tests::stub_boot;
 use gpui::TestAppContext;
-use muxy_app_core::{AppState, ServerId};
+use muxy_app_core::AppState;
+use muxy_app_core::ServerId;
 
 #[gpui::test]
 fn exec_consent_preflight_validates_sync_and_async_commands(cx: &mut TestAppContext) {

@@ -195,7 +195,7 @@ fn a_phone_uses_a_server_over_ssh_as_it_would_when_paired() -> TestResult {
         .ok_or("no Home project")?;
     let session = connection.create_session(home.id.clone(), 40, 6)?;
     let terminal = connection.attach(session.id, 40, 6)?;
-    terminal.send_input(b"echo ssh-$((40+2))".to_vec())?;
+    terminal.send_input(b"printf '\\nssh-%d\\n' $((40+2))".to_vec())?;
     terminal.send_key(Key::Enter, Modifiers::default())?;
     let text = || -> Vec<String> {
         terminal

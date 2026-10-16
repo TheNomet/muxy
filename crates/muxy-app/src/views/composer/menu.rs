@@ -20,16 +20,18 @@ impl Composer {
     pub(crate) fn menu_items(&self) -> Vec<(Item, Command)> {
         let mut items = Vec::new();
         if self.recording() && self.voice_snapshot.phase != muxy_ui::voice::Phase::Starting {
-            items.push((
-                Item::new(
-                    if self.voice_snapshot.phase == muxy_ui::voice::Phase::Paused {
-                        tr!("Resume Dictation")
-                    } else {
-                        tr!("Pause Dictation")
-                    },
-                ),
-                Command::Pause,
-            ));
+            if self.voice_snapshot.phase != muxy_ui::voice::Phase::Transcribing {
+                items.push((
+                    Item::new(
+                        if self.voice_snapshot.phase == muxy_ui::voice::Phase::Paused {
+                            tr!("Resume Dictation")
+                        } else {
+                            tr!("Pause Dictation")
+                        },
+                    ),
+                    Command::Pause,
+                ));
+            }
             items.push((Item::new(tr!("Cancel Dictation")), Command::CancelVoice));
         }
         let mut broadcast = Item::new(if self.settings.broadcast {

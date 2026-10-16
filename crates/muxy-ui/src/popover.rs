@@ -158,6 +158,38 @@ fn positioned_popover(
     .into_any_element()
 }
 
+pub fn contained_dropdown(
+    anchor: Bounds<Pixels>,
+    max_height: Pixels,
+    content: gpui::Stateful<gpui::Div>,
+) -> AnyElement {
+    canvas(
+        move |bounds, window, cx| {
+            let width = (bounds.size.width - px(16.0)).max(px(0.0));
+            let height = (bounds.size.height - px(16.0)).max(px(0.0));
+            let mut content = content
+                .min_w(anchor.size.width.min(width))
+                .max_w(width)
+                .max_h(max_height.min(height))
+                .into_any_element();
+            let panel = content.layout_as_root(
+                size(AvailableSpace::MinContent, AvailableSpace::MinContent),
+                window,
+                cx,
+            );
+            let origin = bounds.origin + dropdown_origin(anchor, panel, bounds.size);
+            content.prepaint_at(origin, window, cx);
+            content
+        },
+        |_, mut content, window, cx| content.paint(window, cx),
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+    .into_any_element()
+}
+
 fn above_origin(
     anchor: Bounds<Pixels>,
     panel: Size<Pixels>,
@@ -170,7 +202,9 @@ fn above_origin(
     )
 }
 
-fn dropdown_origin(
+/// Where a panel opens from `anchor`: below it, or above when it would not
+/// fit below.
+pub fn dropdown_origin(
     anchor: Bounds<Pixels>,
     panel: Size<Pixels>,
     viewport: Size<Pixels>,

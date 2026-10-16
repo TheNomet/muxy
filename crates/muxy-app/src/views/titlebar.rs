@@ -10,6 +10,9 @@ use muxy_ui::tr;
 
 use crate::model::AppModel;
 
+#[cfg(target_os = "linux")]
+pub(crate) mod linux;
+
 pub(super) fn actions(model: &AppModel, cx: &mut Context<AppModel>) -> (Div, f32) {
     let project = model.state.current_project();
     let available = project.status() == muxy_app_core::ProjectStatus::Available;
@@ -70,9 +73,11 @@ pub(crate) struct BeginWindowMove;
 pub(crate) fn begin_window_move(
     model: &mut AppModel,
     _: &BeginWindowMove,
-    _window: &mut Window,
+    window: &mut Window,
     _: &mut Context<AppModel>,
 ) {
+    #[cfg(target_os = "macos")]
+    let _ = &window;
     if model.overlay.is_some() || model.close_prompt.is_some() {
         return;
     }
@@ -81,11 +86,11 @@ pub(crate) fn begin_window_move(
         drag.begin();
     }
     #[cfg(not(target_os = "macos"))]
-    _window.start_window_move();
+    window.start_window_move();
 }
 
 pub(crate) fn background(id: &'static str) -> Stateful<Div> {
-    div()
+    let background = div()
         .id(id)
         .debug_selector(move || id.into())
         .on_mouse_down(MouseButton::Left, |event, window, cx| {
@@ -94,7 +99,15 @@ pub(crate) fn background(id: &'static str) -> Stateful<Div> {
                 window.dispatch_action(Box::new(BeginWindowMove), cx);
             }
         })
-        .on_click(background_click)
+        .on_click(background_click);
+    #[cfg(target_os = "linux")]
+    let background = background.on_mouse_down(MouseButton::Right, |event, window, cx| {
+        cx.stop_propagation();
+        if window.window_controls().window_menu {
+            window.show_window_menu(event.position);
+        }
+    });
+    background
 }
 
 fn background_click(event: &gpui::ClickEvent, window: &mut Window, cx: &mut App) {
@@ -155,16 +168,37 @@ pub(super) fn icon_button(
 pub(crate) fn navigation(
     model: &AppModel,
     sidebar_width: f32,
+    window: &Window,
     cx: &mut Context<AppModel>,
 ) -> AnyElement {
     let m = model.metrics;
     let theme = &model.theme;
+    #[cfg(not(target_os = "linux"))]
+    let controls = None::<AnyElement>;
+    #[cfg(target_os = "linux")]
+    let controls = linux::controls(
+        window,
+        theme,
+        m,
+        cx.listener(|model, _, _, cx| model.quit(cx)),
+    )
+    .map(|controls| {
+        div()
+            .absolute()
+            .left(m.spacing2())
+            .top_0()
+            .h_full()
+            .flex()
+            .items_center()
+            .child(controls)
+            .into_any_element()
+    });
     background("titlebar-navigation")
         .occlude()
         .absolute()
         .top_0()
         .left_0()
-        .w(px(sidebar_width.max(navigation_width(model))))
+        .w(px(sidebar_width.max(navigation_width(model, window))))
         .h(m.title_bar_height())
         .flex()
         .items_center()
@@ -178,6 +212,7 @@ pub(crate) fn navigation(
         })
         .border_r_1()
         .border_color(theme.border)
+        .children(controls)
         .child(arrow(model, false, cx))
         .child(arrow(model, true, cx))
         .child(
@@ -209,8 +244,23 @@ pub(crate) fn navigation(
         .into_any_element()
 }
 
-pub(super) fn navigation_width(model: &AppModel) -> f32 {
-    f32::from(model.metrics.traffic_light_width() + model.metrics.navigation_arrows_width())
+/// Whether the window's buttons sit in this titlebar. A system that frames
+/// the window draws them itself, above the content.
+fn holds_window_buttons(window: &Window) -> bool {
+    cfg!(target_os = "macos")
+        || matches!(
+            window.window_decorations(),
+            gpui::Decorations::Client { .. }
+        )
+}
+
+pub(super) fn navigation_width(model: &AppModel, window: &Window) -> f32 {
+    let arrows = model.metrics.navigation_arrows_width();
+    f32::from(if holds_window_buttons(window) {
+        model.metrics.traffic_light_width() + arrows
+    } else {
+        arrows
+    })
 }
 
 fn arrow(model: &AppModel, forward: bool, cx: &mut Context<AppModel>) -> AnyElement {

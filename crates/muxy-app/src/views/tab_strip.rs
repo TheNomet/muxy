@@ -33,7 +33,7 @@ pub(crate) fn tab_strip(
     if model.state.current_project().status() == muxy_app_core::ProjectStatus::Missing {
         return strip.justify_end().child(actions).into_any_element();
     }
-    let leading = (titlebar::navigation_width(model) - sidebar_width).max(0.0);
+    let leading = (titlebar::navigation_width(model, window) - sidebar_width).max(0.0);
     let new_tab_width = f32::from(model.metrics.control_medium() + model.metrics.spacing2());
     let available = (f32::from(window.viewport_size().width)
         - sidebar_width

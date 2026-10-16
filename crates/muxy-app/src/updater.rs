@@ -1,22 +1,38 @@
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
 mod replacement;
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+mod unsupported;
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) use unsupported::{CAPABILITY, Installation, PreparedUpdate};
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::io::{Read, Write};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::time::Duration;
 
-use muxy_core::release::{self, Channel};
+use muxy_core::release;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use muxy_core::release::Channel;
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
 use muxy_ui::tr;
 
+#[cfg(target_os = "linux")]
+pub(crate) use linux::{CAPABILITY, Installation, PreparedUpdate};
 #[cfg(target_os = "macos")]
-pub(crate) use macos::{Installation, PreparedUpdate};
+pub(crate) use macos::{CAPABILITY, Installation, PreparedUpdate};
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 pub(crate) const RELEASES: &str = "https://github.com/muxy-app/muxy/releases/download";
+#[cfg(any(target_os = "macos", target_os = "linux", test))]
 const MAX_DOWNLOAD: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Betas share a rolling feed; each stable release carries its own, and the latest one wins.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn feed(channel: Channel) -> &'static str {
     match channel {
         Channel::Beta => "https://github.com/muxy-app/muxy/releases/download/beta-2.x/update.json",
@@ -29,15 +45,17 @@ pub(crate) struct Release {
     pub(crate) version: String,
     url: String,
     size: u64,
+    sha256: Option<String>,
 }
 
 impl Release {
-    #[cfg(test)]
+    #[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
     pub(crate) fn fixture(version: &str) -> Self {
         Self {
             version: version.into(),
             url: String::new(),
             size: 1,
+            sha256: None,
         }
     }
 
@@ -45,6 +63,7 @@ impl Release {
         release::is_newer(&self.version, version)
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux", test))]
     fn parse(bytes: &[u8], current: &str, platform: &str, arch: &str) -> Result<Option<Self>> {
         let metadata: serde_json::Value = serde_json::from_slice(bytes)?;
         if metadata["schema"].as_u64() != Some(1) {
@@ -64,7 +83,14 @@ impl Release {
         let url = asset["url"]
             .as_str()
             .ok_or_else(|| tr!("No update for this platform").to_string())?;
-        if url != format!("{RELEASES}/v{version}/Muxy-{version}-{arch}.dmg") {
+        let filename = match platform {
+            "macos-aarch64" | "macos-x86_64" => format!("Muxy-{version}-{arch}.dmg"),
+            "linux-aarch64" | "linux-x86_64" => {
+                format!("muxy-desktop-{version}-linux-{arch}.tar.gz")
+            }
+            _ => return Err(tr!("No update for this platform").to_string().into()),
+        };
+        if url != format!("{RELEASES}/v{version}/{filename}") {
             return Err(tr!("Unexpected update download location")
                 .to_string()
                 .into());
@@ -75,14 +101,24 @@ impl Release {
         if size == 0 || size > MAX_DOWNLOAD {
             return Err(tr!("Invalid update download size").to_string().into());
         }
+        let sha256 = asset["sha256"].as_str().map(str::to_ascii_lowercase);
+        if (platform.starts_with("linux-") && sha256.is_none())
+            || sha256.as_ref().is_some_and(|hash| {
+                hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+        {
+            return Err(tr!("Invalid update checksum").to_string().into());
+        }
         Ok(Some(Self {
             version: version.into(),
             url: url.into(),
             size,
+            sha256,
         }))
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn client() -> Result<reqwest::blocking::Client> {
     Ok(reqwest::blocking::Client::builder()
         .user_agent(concat!("Muxy/", env!("CARGO_PKG_VERSION")))
@@ -92,6 +128,7 @@ fn client() -> Result<reqwest::blocking::Client> {
         .build()?)
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn latest(
     client: &reqwest::blocking::Client,
     platform: &str,
@@ -111,6 +148,7 @@ fn latest(
     Release::parse(&bytes, env!("CARGO_PKG_VERSION"), platform, arch)
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn download(
     client: &reqwest::blocking::Client,
     release: &Release,
@@ -127,6 +165,24 @@ fn download(
         );
     }
     output.flush()?;
+    if let Some(expected) = &release.sha256 {
+        let mut command = if cfg!(target_os = "macos") {
+            let mut command = std::process::Command::new("/usr/bin/shasum");
+            command.args(["-a", "256"]);
+            command
+        } else {
+            std::process::Command::new("/usr/bin/sha256sum")
+        };
+        let result = command.arg(path).output()?;
+        if !result.status.success()
+            || String::from_utf8_lossy(&result.stdout)
+                .split_whitespace()
+                .next()
+                .is_none_or(|hash| !hash.eq_ignore_ascii_case(expected))
+        {
+            return Err(tr!("Update download checksum mismatch").to_string().into());
+        }
+    }
     Ok(())
 }
 
@@ -140,6 +196,7 @@ mod tests {
         }})
     }
 
+    #[cfg(any(target_os = "macos", test))]
     fn parse(feed: &serde_json::Value) -> Result<Option<Release>> {
         parse_from(feed, "2.0.0-beta.9")
     }
@@ -209,5 +266,35 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn linux_updates_require_the_desktop_archive_and_checksum() {
+        let version = "2.0.0-beta.10";
+        let url = format!("{RELEASES}/v{version}/muxy-desktop-{version}-linux-arm64.tar.gz");
+        let mut data = serde_json::json!({"schema": 1, "version": version, "platforms": {
+            "linux-aarch64": {"url": url, "size": 100, "sha256": "a".repeat(64)}
+        }});
+        let parse = |data: &serde_json::Value| {
+            Release::parse(
+                data.to_string().as_bytes(),
+                "2.0.0-beta.9",
+                "linux-aarch64",
+                "arm64",
+            )
+        };
+        assert!(parse(&data).is_ok_and(|release| release.is_some()));
+        for checksum in [
+            serde_json::Value::Null,
+            "abcd".into(),
+            "z".repeat(64).into(),
+        ] {
+            data["platforms"]["linux-aarch64"]["sha256"] = checksum;
+            assert!(parse(&data).is_err());
+        }
+        data["platforms"]["linux-aarch64"]["sha256"] = "a".repeat(64).into();
+        data["platforms"]["linux-aarch64"]["url"] =
+            format!("{RELEASES}/v{version}/muxy-{version}-linux-arm64.tar.gz").into();
+        assert!(parse(&data).is_err());
     }
 }

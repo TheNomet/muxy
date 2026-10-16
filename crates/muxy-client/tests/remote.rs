@@ -71,14 +71,24 @@ impl Server {
     }
 
     /// Enables mobile access and returns the local client with a fresh offer.
+    /// Tests running alongside can take the chosen port before the server
+    /// listens on it, so a taken port is replaced.
     fn pairing(&self) -> TestResult<(Client, PairingOffer)> {
         let local = self.local()?;
-        let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
-        let state = local.write_remote_access(RemoteAccessSettings {
-            enabled: true,
-            port,
-        })?;
-        assert_eq!(state.status, ListenerStatus::Listening);
+        let mut status = ListenerStatus::Disabled;
+        for _ in 0..8 {
+            let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+            status = local
+                .write_remote_access(RemoteAccessSettings {
+                    enabled: true,
+                    port,
+                })?
+                .status;
+            if status == ListenerStatus::Listening {
+                break;
+            }
+        }
+        assert_eq!(status, ListenerStatus::Listening);
         let mut offer = local.start_pairing()?;
         offer.invite.hosts = vec!["127.0.0.1".into()];
         Ok((local, offer))

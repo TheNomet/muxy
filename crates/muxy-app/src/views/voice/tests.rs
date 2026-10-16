@@ -73,6 +73,28 @@ fn finish_waits_for_the_final_transcript(cx: &mut TestAppContext) {
     poll(cx);
     assert_eq!(*finished.borrow(), ["hello world"]);
     assert!(simulated.cancelled());
+    poll(cx);
+    assert_eq!(*finished.borrow(), ["hello world"]);
+}
+
+#[gpui::test]
+fn dismiss_during_transcription_cannot_deliver_a_late_result(cx: &mut TestAppContext) {
+    let (view, simulated, finished, cx) = panel(
+        Snapshot {
+            phase: Phase::Transcribing,
+            ..Snapshot::default()
+        },
+        cx,
+    );
+    view.update(cx, VoicePanel::dismiss);
+    simulated.update(Snapshot {
+        phase: Phase::Finished,
+        transcript: "Late text".into(),
+        ..Snapshot::default()
+    });
+    poll(cx);
+    assert!(simulated.cancelled());
+    assert!(finished.borrow().is_empty());
 }
 
 #[gpui::test]

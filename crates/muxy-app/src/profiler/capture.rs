@@ -317,7 +317,7 @@ fn parse_usage(value: &str) -> Option<(Duration, u64)> {
     ))
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;

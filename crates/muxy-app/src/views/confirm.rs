@@ -50,9 +50,10 @@ async fn prompt(
 ) -> Result<ConfirmationResponse, String> {
     let (sender, receiver) = async_channel::bounded(1);
     let _dialog = window
-        .update(cx, |_, window, _| {
+        .update(cx, |_, window, cx| {
             muxy_ui::dialog::confirm(
                 window,
+                cx,
                 &muxy_ui::l10n::translate(title),
                 &muxy_ui::l10n::translate(message),
                 &tr!("Close"),
@@ -264,9 +265,10 @@ async fn install_prompt(
 ) -> Result<Option<bool>, String> {
     let (sender, receiver) = async_channel::bounded(1);
     let _dialog = window
-        .update(cx, |_, window, _| {
+        .update(cx, |_, window, cx| {
             muxy_ui::dialog::confirm_with_checkbox(
                 window,
+                cx,
                 &tr!("Muxy Update"),
                 message,
                 [&muxy_ui::l10n::translate(INSTALL), &tr!("Not Now")],
@@ -318,8 +320,8 @@ async fn server_prompt(
 ) -> Result<bool, String> {
     let (sender, receiver) = async_channel::bounded(1);
     let _dialog = window
-        .update(cx, |_, window, _| {
-            muxy_ui::dialog::confirm(window, title, message, label, None, move |response| {
+        .update(cx, |_, window, cx| {
+            muxy_ui::dialog::confirm(window, cx, title, message, label, None, move |response| {
                 let _ = sender.try_send(matches!(response, ConfirmationResponse::Confirmed { .. }));
             })
         })

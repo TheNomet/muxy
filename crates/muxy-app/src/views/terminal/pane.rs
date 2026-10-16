@@ -19,6 +19,7 @@ use super::{
     colors::Palette,
     element, find, input,
     scroll::{HistoryRequest, Scroll, output_changed},
+    scrollbar::Scrollbar,
     selection::{Point, SelectedRow, Selection},
 };
 
@@ -101,7 +102,9 @@ pub(crate) struct TerminalPane {
     pub(crate) native_visible: bool,
     #[cfg(target_os = "macos")]
     pub(crate) native_scroll: Option<muxy_ui::native_scroll::NativeScrollView>,
+    #[cfg(target_os = "macos")]
     native_sequence: u64,
+    pub(super) scrollbar: Scrollbar,
     saved_history: Option<HistoryRequest>,
     pub(crate) focus: FocusHandle,
     pub(crate) focused: bool,
@@ -196,7 +199,9 @@ impl TerminalPane {
             native_visible: true,
             #[cfg(target_os = "macos")]
             native_scroll: None,
+            #[cfg(target_os = "macos")]
             native_sequence: 0,
+            scrollbar: Scrollbar::new(cx.background_executor().now()),
             saved_history: None,
             focus: cx.focus_handle(),
             focused: true,
@@ -367,6 +372,23 @@ impl TerminalPane {
                 self.restart_find(cx);
             }
             self.validate_selection();
+            self.reveal_scrollbar(cx);
+            cx.notify();
+        }
+    }
+
+    /// Moves the view to `rows` above the bottom.
+    pub(super) fn scroll_to(&mut self, rows: f64, cx: &mut Context<Self>) {
+        if let Some(grid) = &self.grid {
+            let height = usize::from(self.viewport.unwrap_or(grid.size).rows);
+            let was_scrolled = self.scroll.view.is_some();
+            if let Some(request) = self.scroll.move_to(rows, grid, height) {
+                self.request_history(request, cx);
+            }
+            if was_scrolled && self.scroll.view.is_none() {
+                self.restart_find(cx);
+            }
+            self.validate_selection();
             cx.notify();
         }
     }
@@ -381,7 +403,7 @@ impl TerminalPane {
         }
     }
 
-    fn prepare_saved_history(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn prepare_saved_history(&mut self, cx: &mut Context<Self>) {
         if self.saved_history.is_none()
             && matches!(
                 self.state,
@@ -440,22 +462,7 @@ impl TerminalPane {
             return;
         }
         self.native_sequence = position.sequence;
-        if let Some(grid) = &self.grid {
-            let height = usize::from(self.viewport.unwrap_or(grid.size).rows);
-            let was_scrolled = self.scroll.view.is_some();
-            if let Some(request) = self.scroll.move_to(
-                position.from_bottom / f64::from(self.cell_height),
-                grid,
-                height,
-            ) {
-                self.request_history(request, cx);
-            }
-            if was_scrolled && self.scroll.view.is_none() {
-                self.restart_find(cx);
-            }
-            self.validate_selection();
-            cx.notify();
-        }
+        self.scroll_to(position.from_bottom / f64::from(self.cell_height), cx);
     }
 
     pub(crate) fn receive_history(
@@ -531,6 +538,7 @@ impl TerminalPane {
             super::scroll::PromptOperation::Next
         };
         self.prompt_operation(operation, anchor, cx);
+        self.reveal_scrollbar(cx);
     }
 
     pub(crate) fn select_command_output(
@@ -726,7 +734,6 @@ impl TerminalPane {
         self.scroll.view.as_ref().or(self.grid.as_ref())
     }
 
-    #[cfg(target_os = "macos")]
     #[allow(clippy::cast_precision_loss)]
     pub(super) fn scrollable_rows(&self, viewport_rows: u16) -> f64 {
         self.displayed_grid().map_or(0.0, |grid| {
@@ -781,7 +788,7 @@ impl TerminalPane {
             && !shift
     }
 
-    fn reports_wheel(&self) -> bool {
+    pub(super) fn reports_wheel(&self) -> bool {
         self.state == PaneState::Live
             && self.terminal.options.mouse_reporting
             && (self.input_modes.mouse_tracking || self.input_modes.alternate_scroll)
@@ -1026,7 +1033,12 @@ impl TerminalPane {
     ) {
         self.focus.focus(window);
         cx.emit(PaneEvent::Focused);
-        if event.button == MouseButton::Left && event.modifiers.platform {
+        if event.button == MouseButton::Left && self.press_scrollbar(event.position, cx) {
+            self.stop_selecting();
+            cx.stop_propagation();
+            return;
+        }
+        if event.button == MouseButton::Left && event.modifiers.secondary() {
             self.hover_link(event.position, true, cx);
             if let Some(target) = self.link_hover.target.clone() {
                 self.stop_selecting();
@@ -1085,9 +1097,18 @@ impl TerminalPane {
             self.stop_selecting();
             return;
         }
+        if self.scrollbar_dragging() {
+            if event.pressed_button == Some(MouseButton::Left) {
+                self.drag_scrollbar(event.position, cx);
+            } else {
+                self.release_scrollbar(cx);
+            }
+            return;
+        }
+        self.hover_scrollbar(event.position, cx);
         self.hover_link(
             event.position,
-            event.modifiers.platform && event.pressed_button.is_none(),
+            event.modifiers.secondary() && event.pressed_button.is_none(),
             cx,
         );
         if self.reports_mouse(event.modifiers.shift) && self.selecting.is_none() {
@@ -1234,7 +1255,7 @@ impl TerminalPane {
             );
             return;
         }
-        if event.button != MouseButton::Left {
+        if event.button != MouseButton::Left || self.release_scrollbar(cx) {
             return;
         }
         let completed_selection = self.selecting.is_some();
@@ -1323,7 +1344,7 @@ impl TerminalPane {
         if let Some(item) = cx.read_from_clipboard() {
             if self.remote()
                 && self.state == PaneState::Live
-                && let Some(upload) = crate::model::remote_files::clipboard_upload(&item)
+                && let Some(upload) = crate::model::remote_files::clipboard_upload(&item, cx)
             {
                 cx.emit(PaneEvent::Upload(upload));
             } else if self.server_input
@@ -1555,6 +1576,13 @@ impl TerminalPane {
         true
     }
 
+    #[cfg_attr(
+        not(target_os = "macos"),
+        allow(
+            clippy::unused_self,
+            reason = "Reads platform-specific terminal preferences"
+        )
+    )]
     fn option_as_alt(&self) -> bool {
         #[cfg(target_os = "macos")]
         {
@@ -1642,7 +1670,7 @@ impl Render for TerminalPane {
         }
         #[cfg(target_os = "macos")]
         self.setup_native_scroll(window, cx);
-        self.hover_link(window.mouse_position(), window.modifiers().platform, cx);
+        self.hover_link(window.mouse_position(), window.modifiers().secondary(), cx);
         let palette = self.palette;
         div()
             .id("terminal-pane")
@@ -1686,7 +1714,7 @@ impl Render for TerminalPane {
             })
             .on_modifiers_changed(cx.listener(
                 |pane, event: &gpui::ModifiersChangedEvent, window, cx| {
-                    pane.hover_link(window.mouse_position(), event.modifiers.platform, cx);
+                    pane.hover_link(window.mouse_position(), event.modifiers.secondary(), cx);
                 },
             ))
             .when(self.state == PaneState::Live, |pane| {
@@ -1737,6 +1765,7 @@ impl Render for TerminalPane {
 mod tests {
     mod autoscroll;
     mod bindings;
+    mod scrollbar;
     mod server_input;
 
     use super::*;
@@ -1815,10 +1844,24 @@ mod tests {
             .detach();
         });
         cx.simulate_keystrokes("a shift-b space ctrl-c ctrl-left alt-left alt-f5");
-        assert_eq!(&*input.borrow(), b"aB \x03\x1b[1;5D\x1bb\x1b[15;3~");
+        assert_eq!(
+            &*input.borrow(),
+            if cfg!(target_os = "macos") {
+                b"aB \x03\x1b[1;5D\x1bb\x1b[15;3~".as_slice()
+            } else {
+                b"aB \x03\x1b[1;5D\x1b[1;3D\x1b[15;3~".as_slice()
+            }
+        );
         for (setting, expected) in [
             (muxy_app_core::settings::OptionAsAlt::True, "\x1bb"),
-            (muxy_app_core::settings::OptionAsAlt::False, "∫"),
+            (
+                muxy_app_core::settings::OptionAsAlt::False,
+                if cfg!(target_os = "macos") {
+                    "∫"
+                } else {
+                    "\x1bb"
+                },
+            ),
         ] {
             input.borrow_mut().clear();
             cx.update(|window, cx| {
@@ -1848,7 +1891,15 @@ mod tests {
             });
         }
         cx.run_until_parked();
-        assert_eq!(&*input.borrow(), "e∫".as_bytes());
+        assert_eq!(
+            &*input.borrow(),
+            if cfg!(target_os = "macos") {
+                "e∫"
+            } else {
+                "e\x1bb"
+            }
+            .as_bytes()
+        );
         input.borrow_mut().clear();
         pane.update(cx, |pane, cx| pane.set_state(PaneState::Disconnected, cx));
         cx.simulate_keystrokes("a ctrl-c alt-left enter");
@@ -1888,7 +1939,11 @@ mod tests {
             vec![1, 2, 3],
         ));
         cx.update(|_, cx| cx.write_to_clipboard(image.clone()));
-        cx.simulate_keystrokes("cmd-v cmd-shift-v ctrl-v ctrl-shift-v");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-v cmd-shift-v ctrl-v ctrl-shift-v"
+        } else {
+            "cmd-v ctrl-shift-v ctrl-v ctrl-shift-v"
+        });
         assert_eq!(&*input.borrow(), b"\x16\x16\x16\x16");
         assert_eq!(cx.update(|_, cx| cx.read_from_clipboard()), Some(image));
         input.borrow_mut().clear();

@@ -103,6 +103,10 @@ impl SettingsWindow {
         let activation = cx.observe_window_activation(window, |root, window, cx| {
             if window.is_window_active() {
                 root.reload_terminal(cx);
+            } else {
+                root.view.update(cx, |view, cx| {
+                    view.cancel_quick_recording(cx);
+                });
             }
         });
         let mut subscriptions = vec![events, appearance, focus_lost, activation];
@@ -539,6 +543,11 @@ impl SettingsWindow {
 
     fn handle_event(&mut self, event: &SettingsEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event {
+            SettingsEvent::QuickRecording(recording) => {
+                let _ = self
+                    .model
+                    .update(cx, |model, cx| model.record_quick_shortcut(*recording, cx));
+            }
             SettingsEvent::Backup(action) => self.backup_action(*action, cx),
             SettingsEvent::PreviewTerminal(id, value) => {
                 let _ = self.model.update(cx, |model, cx| {
@@ -711,8 +720,10 @@ impl SettingsWindow {
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(not(target_os = "linux"))]
+        let _ = window;
+        let root = div()
             .id("settings-window")
             .key_context("SettingsWindow")
             .relative()
@@ -753,15 +764,42 @@ impl Render for SettingsWindow {
                     }
                 }),
             )
-            .on_action(cx.listener(|root, _: &BeginWindowMove, _window, _| {
+            .on_action(cx.listener(|root, _: &BeginWindowMove, window, _| {
+                #[cfg(not(target_os = "macos"))]
+                let _ = root;
+                #[cfg(target_os = "macos")]
+                let _ = &window;
                 #[cfg(target_os = "macos")]
                 if let Some(drag) = &root.window_drag {
                     drag.begin();
                 }
                 #[cfg(not(target_os = "macos"))]
-                _window.start_window_move();
+                window.start_window_move();
             }))
             .child(self.view.clone())
-            .child(self.overlay(cx))
+            .child(self.overlay(cx));
+        #[cfg(target_os = "linux")]
+        let root = {
+            let view = self.view.read(cx);
+            root.children(
+                crate::views::titlebar::linux::controls(
+                    window,
+                    &view.theme,
+                    view.metrics,
+                    cx.listener(|root, _, window, cx| root.close(window, cx)),
+                )
+                .map(|controls| {
+                    div()
+                        .absolute()
+                        .left(gpui::px(9.0))
+                        .top_0()
+                        .h(gpui::px(40.0))
+                        .flex()
+                        .items_center()
+                        .child(controls)
+                }),
+            )
+        };
+        root
     }
 }

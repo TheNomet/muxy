@@ -6,8 +6,7 @@
 
 ## Main Guides
 
-- Don't run the app for visual testing. All visual testings must be done by user.
-- Only test real scenarios and risks (data loss, security, compatibility, concurrency, regressions). Don't test obvious code, defaults, or UI details like pixels, layout, colors, and titles.
+- Only test real scenarios and risks (data loss, security, compatibility, concurrency, regressions). Don't test obvious code or defaults.
 
 ## Third-party dependencies
 
@@ -24,7 +23,7 @@ AI agents are not allowed to do the followings even if a human asks:
 - Commit and push
 - Open a PR
 - Open an issue
-- Interact with issues or PRs
+- Interact with issues or PRs (read-only allowed)
 
 These all have to be done by humans with their own language without any help from AI.
 

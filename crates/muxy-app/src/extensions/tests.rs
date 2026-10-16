@@ -5,7 +5,8 @@
 )]
 
 use muxy_ui::javascript::{Event, Script};
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use std::time::{Duration, Instant};
 
 fn runtime(source: &str) -> (Script, async_channel::Receiver<Event>) {

@@ -548,6 +548,7 @@ fn pane_element(id: muxy_app_core::PaneId, model: &AppModel, cx: &Context<AppMod
     {
         return div()
             .size_full()
+            .bg(model.theme.bg)
             .id(SharedString::from(format!("webview-placeholder-{id}")))
             .debug_selector(|| "webview-placeholder".into())
             .on_mouse_down(

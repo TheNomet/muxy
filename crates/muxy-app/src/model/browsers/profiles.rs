@@ -32,27 +32,37 @@ impl AppModel {
             return self.default_browser_profile();
         };
         let profiles = self.browser_profiles()?;
-        if let Some(profile) = wanted
+        let profile = if let Some(profile) = wanted
             .parse::<ProfileId>()
             .ok()
             .and_then(|id| profiles.get(id).ok())
         {
-            return Ok(profile);
+            profile
+        } else {
+            profiles
+                .find(wanted)
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| format!("no browser profile named '{wanted}'"))?
+        };
+        if self.browsers.retiring.contains(&profile.id().to_string()) {
+            return Err("browser profile is being deleted".into());
         }
-        profiles
-            .find(wanted)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("no browser profile named '{wanted}'"))
+        Ok(profile)
     }
 
-    /// A pane's saved profile. One deleted since falls back to the default.
     pub(crate) fn pane_profile(&mut self, saved: Option<&str>) -> Result<Profile, String> {
+        if saved.is_some_and(|id| self.browsers.retiring.contains(id)) {
+            return Err("browser profile is being deleted".into());
+        }
         self.browser_profile(saved)
             .or_else(|_| self.default_browser_profile())
     }
 
     fn default_browser_profile(&mut self) -> Result<Profile, String> {
         let chosen = self.settings.browser.default_profile.clone();
+        if self.browsers.retiring.contains(&chosen) {
+            return Err("browser profile is being deleted".into());
+        }
         let profiles = self.browser_profiles()?;
         if let Some(profile) = chosen
             .parse::<ProfileId>()
@@ -114,6 +124,11 @@ impl AppModel {
         change: &BrowserChange,
         cx: &mut Context<Self>,
     ) -> Result<bool, String> {
+        if let BrowserChange::DefaultProfile(id) = change
+            && self.browsers.retiring.contains(id)
+        {
+            return Err("browser profile is being deleted".into());
+        }
         let result = match change {
             BrowserChange::AddProfile(name) => self.add_browser_profile(name),
             BrowserChange::RenameProfile(id, name) => self.rename_browser_profile(id, name),
@@ -177,16 +192,56 @@ impl AppModel {
             return Err(tr!("The default profile can't be deleted").into());
         }
         let parsed = parse_id(id)?;
+        #[cfg(target_os = "linux")]
+        {
+            let profile = self.browser_profile(Some(id))?;
+            self.browsers.retiring.insert(id.to_owned());
+            let (sender, closed) = async_channel::bounded(1);
+            muxy_ui::browser::close_profile(&profile, move |result| {
+                let _ = sender.try_send(result);
+            });
+            cx.spawn(async move |model, cx| {
+                let result = closed.recv().await;
+                let _ = model.update(cx, |model, cx| {
+                    let result = result
+                        .map_err(|error| error.to_string())
+                        .and_then(|result| result.map_err(|error| error.to_string()));
+                    let result = result.and_then(|()| model.finish_profile_delete(parsed, cx));
+                    model.browsers.retiring.remove(&parsed.to_string());
+                    if let Err(error) = result {
+                        model.fail(error, cx);
+                    }
+                    model.refresh_browser_profiles();
+                    model.sync_preferences(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+            Ok(())
+        }
+        #[cfg(target_os = "macos")]
+        self.finish_profile_delete(parsed, cx)
+    }
+
+    fn finish_profile_delete(
+        &mut self,
+        parsed: ProfileId,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let id = parsed.to_string();
+        let default = self.default_browser_profile()?.id().to_string();
+        if id == default {
+            return Err(tr!("The default profile can't be deleted").into());
+        }
         let users: Vec<_> = self
             .browser_panes()
             .into_iter()
-            .filter(|(.., browser)| browser.profile.as_deref() == Some(id))
+            .filter(|(.., browser)| browser.profile.as_deref() == Some(&id))
             .map(|(_, _, pane, _)| pane)
             .collect();
         for pane in &users {
             self.browsers.views.remove(pane);
         }
-        cx.notify();
         self.browser_profiles()?
             .delete(parsed)
             .map_err(|error| error.to_string())?;
@@ -196,6 +251,7 @@ impl AppModel {
         if !users.is_empty() {
             self.save(cx);
         }
+        cx.notify();
         Ok(())
     }
 
@@ -213,7 +269,7 @@ impl AppModel {
             .map_err(|error| error.to_string())?;
         let name = profile.name().to_owned();
         let (sender, cleared) = async_channel::bounded(1);
-        polybrowser::clear_site_data(muxy_ui::browser::ENGINE, &profile, move |result| {
+        muxy_ui::browser::clear_site_data(muxy_ui::browser::ENGINE, &profile, move |result| {
             let _ = sender.try_send(result);
         })
         .map_err(|error| error.to_string())?;
@@ -294,11 +350,14 @@ impl AppModel {
         cx: &mut Context<Self>,
     ) {
         let (sender, written) = async_channel::bounded(1);
-        if let Err(error) =
-            polybrowser::import_cookies(muxy_ui::browser::ENGINE, profile, cookies, move |result| {
+        if let Err(error) = muxy_ui::browser::import_cookies(
+            muxy_ui::browser::ENGINE,
+            profile,
+            cookies,
+            move |result| {
                 let _ = sender.try_send(result);
-            })
-        {
+            },
+        ) {
             self.fail(error.to_string(), cx);
             return;
         }

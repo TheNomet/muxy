@@ -92,7 +92,11 @@ fn find_searches_each_edit_immediately_ignores_case_and_keeps_input_out_of_the_s
         );
     });
     cx.run_until_parked();
-    cx.simulate_keystrokes("cmd-f");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-f"
+    } else {
+        "ctrl-shift-f"
+    });
     cx.run_until_parked();
     requests.try_iter().for_each(drop);
     for expected in ["f", "fi", "fin", "fina", "final"] {

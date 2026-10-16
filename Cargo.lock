@@ -198,6 +198,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "rand 0.9.5",
+ "raw-window-handle",
  "serde",
  "serde_repr",
  "url",
@@ -3011,7 +3012,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/muxy-app/gpui?rev=bd450eaedd79e2c86ba7a3bae0b62827f6a25954#bd450eaedd79e2c86ba7a3bae0b62827f6a25954"
+source = "git+https://github.com/muxy-app/gpui?rev=0f0fecb8f3b125df633598973d78cd81a7880e87#0f0fecb8f3b125df633598973d78cd81a7880e87"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
@@ -4582,6 +4583,7 @@ dependencies = [
  "muxy-ui",
  "serde_json",
  "tempfile",
+ "xim-ctext",
  "zed-reqwest",
  "zip",
 ]
@@ -4709,11 +4711,13 @@ dependencies = [
 name = "muxy-ui"
 version = "2.0.0-beta-0"
 dependencies = [
+ "ashpd 0.11.1",
  "async-channel 2.5.0",
  "block2",
  "dispatch2",
  "gpui",
  "image",
+ "libloading",
  "muxy-core",
  "objc2",
  "objc2-app-kit",
@@ -4729,7 +4733,10 @@ dependencies = [
  "objc2-web-kit",
  "polybrowser",
  "raw-window-handle",
+ "serde_json",
  "unicode-segmentation",
+ "x11rb",
+ "zbus",
 ]
 
 [[package]]
@@ -5840,9 +5847,10 @@ checksum = "5da3b0203fd7ee5720aa0b5e790b591aa5d3f41c3ed2c34a3a393382198af2f7"
 [[package]]
 name = "polybrowser"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=ea4b3f80109abcfbfd07f062599e21964633fa04#ea4b3f80109abcfbfd07f062599e21964633fa04"
+source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "polybrowser-core",
+ "polybrowser-webkitgtk",
  "polybrowser-wry",
  "raw-window-handle",
 ]
@@ -5850,7 +5858,7 @@ dependencies = [
 [[package]]
 name = "polybrowser-core"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=ea4b3f80109abcfbfd07f062599e21964633fa04#ea4b3f80109abcfbfd07f062599e21964633fa04"
+source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "aes",
  "cbc",
@@ -5871,16 +5879,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "polybrowser-webkitgtk"
+version = "0.1.0"
+source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
+dependencies = [
+ "libloading",
+ "polybrowser-core",
+ "serde_json",
+]
+
+[[package]]
 name = "polybrowser-wry"
 version = "0.1.0"
-source = "git+https://github.com/saeedvaziry/polybrowser?rev=ea4b3f80109abcfbfd07f062599e21964633fa04#ea4b3f80109abcfbfd07f062599e21964633fa04"
+source = "git+https://github.com/saeedvaziry/polybrowser?rev=b215bae4465af6ca81a15865023409224622d7fb#b215bae4465af6ca81a15865023409224622d7fb"
 dependencies = [
  "block2",
+ "gtk",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "objc2-web-kit",
  "polybrowser-core",
+ "polybrowser-webkitgtk",
  "raw-window-handle",
  "wry",
 ]
@@ -10117,8 +10137,6 @@ checksum = "163b33ed8786455e2fa5d72f554057ce3f3182425434f756cd39c99839d88e23"
 [[package]]
 name = "xim-ctext"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ac61a7062c40f3c37b6e82eeeef835d5cc7824b632a72784a89b3963c33284c"
 dependencies = [
  "encoding_rs",
 ]

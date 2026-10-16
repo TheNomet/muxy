@@ -1,7 +1,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyElement, AppContext, Bounds, Hsla, IntoElement, ParentElement, PathBuilder, Pixels,
-    SharedString, StatefulInteractiveElement, Styled, canvas, div, point, px, svg,
+    AnyElement, Bounds, Hsla, IntoElement, ParentElement, PathBuilder, Pixels, SharedString,
+    StatefulInteractiveElement, Styled, canvas, div, point, px, svg,
 };
 use muxy_app_core::{
     PaneContent, ProjectId, ServerId, Tab,
@@ -11,12 +11,14 @@ use muxy_app_core::{
 use muxy_protocol::{AgentProvider, ProgressState, SessionId, TerminalProgress};
 use muxy_ui::components::Tooltip;
 use muxy_ui::l10n::{tr_key, translate};
+#[cfg(target_os = "macos")]
 use muxy_ui::spinner::NativeSpinner;
 use muxy_ui::tr;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use crate::model::AppModel;
+use gpui::AppContext;
 use gpui::InteractiveElement;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -241,15 +243,18 @@ pub(super) fn glyph(tab: &Tab, model: &AppModel, size: Pixels, fallback: AnyElem
         .into_any_element()
 }
 
+#[cfg(target_os = "macos")]
 #[derive(Clone, Default)]
 pub(crate) struct Spinners(Rc<RefCell<Registry>>);
 
+#[cfg(target_os = "macos")]
 #[derive(Default)]
 struct Registry {
     blocked: bool,
     natives: Vec<Weak<Native>>,
 }
 
+#[cfg(target_os = "macos")]
 struct Native {
     spinner: Option<NativeSpinner>,
     bounds: Cell<Option<Bounds<Pixels>>>,
@@ -257,6 +262,7 @@ struct Native {
     visible: Cell<bool>,
 }
 
+#[cfg(target_os = "macos")]
 impl Spinners {
     /// Hides every spinner, for when native views can't be placed reliably.
     pub(crate) fn set_blocked(&self, blocked: bool) {
@@ -325,6 +331,99 @@ impl Spinners {
                         }
                         ((), native)
                     });
+                });
+            },
+        )
+        .size(size)
+        .into_any_element()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[derive(Clone, Default)]
+pub(crate) struct Spinners(
+    Rc<RefCell<std::collections::HashMap<gpui::WindowId, Weak<Cell<bool>>>>>,
+);
+
+#[cfg(not(target_os = "macos"))]
+impl Spinners {
+    #[allow(
+        clippy::unused_self,
+        reason = "GPUI clips its own overlays; only AppKit needs this hook"
+    )]
+    pub(crate) fn set_blocked(&self, _blocked: bool) {}
+    #[allow(
+        clippy::unused_self,
+        reason = "GPUI clips its own overlays; only AppKit needs this hook"
+    )]
+    pub(crate) fn present(&self, _covers: &[Bounds<Pixels>]) {}
+
+    fn glyph(&self, id: String, size: Pixels, color: Hsla) -> AnyElement {
+        let registry = self.0.clone();
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, cx| {
+                if !window.content_mask().bounds.intersects(&bounds) {
+                    return;
+                }
+                window.with_global_id(SharedString::from(id).into(), |id, window| {
+                    window.with_element_state(
+                        id,
+                        |state: Option<(std::time::Instant, Rc<Cell<bool>>)>, window| {
+                            let (start, pending) = state.unwrap_or_else(|| {
+                                let mut registry = registry.borrow_mut();
+                                registry.retain(|_, pending| pending.strong_count() > 0);
+                                let id = window.window_handle().window_id();
+                                let pending = registry
+                                    .get(&id)
+                                    .and_then(Weak::upgrade)
+                                    .unwrap_or_else(|| {
+                                        let pending = Rc::new(Cell::new(false));
+                                        registry.insert(id, Rc::downgrade(&pending));
+                                        pending
+                                    });
+                                (std::time::Instant::now(), pending)
+                            });
+                            let angle =
+                                (start.elapsed().as_secs_f32() % 0.8) / 0.8 * std::f32::consts::TAU;
+                            let line = px((f32::from(size) / 8.0).max(1.0));
+                            let center = bounds.center();
+                            let radius = (size - line) / 2.0;
+                            let mut arc = PathBuilder::stroke(line);
+                            for step in 0..=24_u16 {
+                                let theta =
+                                    angle + std::f32::consts::TAU * 0.28 * f32::from(step) / 24.0;
+                                let p = point(
+                                    center.x + radius * theta.cos(),
+                                    center.y + radius * theta.sin(),
+                                );
+                                if step == 0 {
+                                    arc.move_to(p);
+                                } else {
+                                    arc.line_to(p);
+                                }
+                            }
+                            if let Some(track) = ring_path(bounds, 1.0, line) {
+                                window.paint_path(track, color.opacity(0.25));
+                            }
+                            if let Ok(arc) = arc.build() {
+                                window.paint_path(arc, color);
+                            }
+                            let handle = window.window_handle();
+                            if !cfg!(test) && !pending.replace(true) {
+                                let pending = pending.clone();
+                                cx.spawn(async move |cx| {
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_millis(50))
+                                        .await;
+                                    pending.set(false);
+                                    let _ = handle.update(cx, |_, window, _| window.refresh());
+                                })
+                                .detach();
+                            }
+                            ((), (start, pending))
+                        },
+                    );
                 });
             },
         )

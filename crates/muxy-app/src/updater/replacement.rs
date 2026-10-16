@@ -4,7 +4,7 @@ use muxy_ui::tr;
 
 use super::Result;
 
-pub(super) fn lock(directory: &Path) -> Result<std::fs::File> {
+pub(super) fn lock(directory: &Path) -> Result<muxy_core::file_lock::FileLock> {
     Ok(muxy_client::local::bundle::lock_replacement(directory)?)
 }
 

@@ -29,6 +29,7 @@ pub struct TerminalBindings {
     pub clear_defaults: bool,
 }
 
+#[cfg(target_os = "macos")]
 static DEFAULT_BINDINGS: LazyLock<BTreeMap<KeyChord, TerminalAction>> = LazyLock::new(|| {
     [
         ("shift-enter", TerminalAction::Text(b"\n".to_vec())),
@@ -47,6 +48,23 @@ static DEFAULT_BINDINGS: LazyLock<BTreeMap<KeyChord, TerminalAction>> = LazyLock
         ("cmd-pageup", TerminalAction::ScrollPageUp),
         ("cmd-pagedown", TerminalAction::ScrollPageDown),
         ("cmd-0", TerminalAction::ResetFontSize),
+    ]
+    .into_iter()
+    .map(|(key, action)| (KeyChord::default_binding(key), action))
+    .collect()
+});
+
+#[cfg(not(target_os = "macos"))]
+static DEFAULT_BINDINGS: LazyLock<BTreeMap<KeyChord, TerminalAction>> = LazyLock::new(|| {
+    [
+        ("shift-enter", TerminalAction::Text(b"\n".to_vec())),
+        ("ctrl-shift-v", TerminalAction::Paste),
+        ("ctrl-shift-a", TerminalAction::SelectAll),
+        ("ctrl-shift-home", TerminalAction::ScrollTop),
+        ("ctrl-shift-end", TerminalAction::ScrollBottom),
+        ("shift-pageup", TerminalAction::ScrollPageUp),
+        ("shift-pagedown", TerminalAction::ScrollPageDown),
+        ("ctrl-0", TerminalAction::ResetFontSize),
     ]
     .into_iter()
     .map(|(key, action)| (KeyChord::default_binding(key), action))

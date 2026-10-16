@@ -739,7 +739,7 @@ fn project_row(
                                 .debug_selector(move || format!("project-worktree-label-{id}"))
                                 .truncate()
                                 .text_size(m.font_footnote())
-                                .font_family(".AppleSystemUIFontMonospaced")
+                                .font_family(muxy_ui::font::monospace())
                                 .font_weight(FontWeight::NORMAL)
                                 .child(server.map_or_else(
                                     || worktree.to_owned(),
@@ -910,7 +910,11 @@ fn project_tile(project: &Project, model: &AppModel, group: SharedString) -> Any
             .rounded(m.radius_md())
             .object_fit(gpui::ObjectFit::Cover)
             .into_any_element()
-    } else if let Some(icon) = &project.icon {
+    } else if let Some(icon) = project
+        .icon
+        .as_ref()
+        .filter(|icon| muxy_ui::symbols::PROJECT_ICONS || !icon.starts_with("sf:"))
+    {
         if let Some(symbol) = icon.strip_prefix("sf:") {
             SymbolGlyph::new(symbol.to_owned(), m.font_title_large(), foreground.into())
                 .into_any_element()

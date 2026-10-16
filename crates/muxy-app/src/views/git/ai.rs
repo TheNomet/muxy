@@ -113,9 +113,10 @@ impl AiConfirmation {
     ) -> Result<Option<PromptResponse>, String> {
         let (sender, receiver) = async_channel::bounded(1);
         let _dialog = window
-            .update(cx, |_, window, _| {
+            .update(cx, |_, window, cx| {
                 muxy_ui::dialog::confirm_with_prompt(
                     window,
+                    cx,
                     &self.title(),
                     &self.message(),
                     &muxy_ui::l10n::translate(self.action.settings_title()),

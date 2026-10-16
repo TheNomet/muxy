@@ -152,7 +152,11 @@ fn the_custom_command_form_saves_and_reopens_without_requiring_a_host(cx: &mut T
     assert!(entry.ssh.is_empty());
     view.update(cx, |model, cx| model.open_server_form(Some(entry.id), cx));
     cx.run_until_parked();
-    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    });
     cx.simulate_input("vm ssh 'other box' --");
     click(cx, "server-save");
     let edited = listed(&path).pop().expect("edited command");

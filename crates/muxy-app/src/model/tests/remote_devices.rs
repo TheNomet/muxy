@@ -280,7 +280,11 @@ fn remote_add_project(cx: &mut TestAppContext) -> Result {
         "Add Project before connecting opened the picker once ready"
     );
     settle(cx);
-    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    });
     cx.simulate_input(&folder.to_string_lossy());
     settle(cx);
     cx.simulate_keystrokes("alt-enter");

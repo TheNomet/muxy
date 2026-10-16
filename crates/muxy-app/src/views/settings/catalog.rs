@@ -152,6 +152,15 @@ pub(super) const SETTINGS: &[Setting] = &[
         section: tr_key!("Voice"),
     },
     Setting {
+        id: "composer-voice-model",
+        label: tr_key!("Offline voice model"),
+        description: tr_key!(
+            "Path to a local multilingual Whisper model. Used by Linux dictation."
+        ),
+        category: Category::Composer,
+        section: tr_key!("Voice"),
+    },
+    Setting {
         id: "composer-clear-after",
         label: tr_key!("Clear after sending"),
         description: tr_key!("Clear the draft only after every terminal confirms delivery."),

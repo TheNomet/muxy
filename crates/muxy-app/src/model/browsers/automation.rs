@@ -62,14 +62,13 @@ impl AppModel {
                     .browser
                     .resolve(string(args, "url")?)
                     .ok_or("invalid url")?;
+                self.state
+                    .set_browser_url(pane, Some(url.clone()))
+                    .map_err(|error| error.to_string())?;
                 if let Some(view) = self.browser_view(pane) {
                     view.update(cx, |view, cx| view.load(&url, cx));
-                } else {
-                    self.state
-                        .set_browser_url(pane, Some(url))
-                        .map_err(|error| error.to_string())?;
-                    self.save(cx);
                 }
+                self.save(cx);
                 done(Value::Null)
             }
             "close" => {
@@ -297,7 +296,7 @@ fn wait_for_navigation(
 
 fn screenshot(view: &Entity<BrowserView>, cx: &mut Context<AppModel>) -> Reply {
     let (sender, image) = async_channel::bounded(1);
-    if let Err(error) = view.read(cx).native.browser().snapshot(move |outcome| {
+    if let Err(error) = view.read(cx).native.capture(move |outcome| {
         let _ = sender.try_send(outcome);
     }) {
         return Task::ready(Err(error.to_string()));

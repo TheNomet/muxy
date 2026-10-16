@@ -10,9 +10,10 @@ pub(super) async fn prompt(
     use muxy_ui::tr;
 
     let (send, receive) = async_channel::bounded(1);
-    let dialog = window.update(cx, |_, window, _| {
+    let dialog = window.update(cx, |_, window, cx| {
         muxy_ui::dialog::confirm(
             window,
+            cx,
             &tr!("Confirm Git Operation"),
             message,
             &tr!("Confirm"),

@@ -122,6 +122,11 @@ impl<A> Command<A> {
         self
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn is_disabled(&self) -> bool {
+        self.disabled
+    }
+
     fn matches(&self, query: &str) -> bool {
         let badge = self.badge.as_ref().map_or("", SharedString::as_ref);
         let searchable = format!("{} {} {badge}", self.title, self.keywords).to_lowercase();
@@ -177,6 +182,11 @@ impl<A> Registry<A> {
         }
         self.commands.push(command);
         None
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn command(&self, id: &str) -> Option<&Command<A>> {
+        self.commands.iter().find(|command| command.id == id)
     }
 
     fn items(&self, query: &str) -> Vec<PickerItem> {

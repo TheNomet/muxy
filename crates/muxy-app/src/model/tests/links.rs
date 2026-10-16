@@ -81,7 +81,11 @@ fn terminal_menu_focuses_the_clicked_split_and_routes_clipboard_actions(cx: &mut
             .selection
             .is_none()
     }));
-    cx.simulate_keystrokes("cmd-c");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-c"
+    } else {
+        "ctrl-shift-c"
+    });
     assert!(cx.read(|cx| {
         cx.read_from_clipboard()
             .and_then(|item| item.text())

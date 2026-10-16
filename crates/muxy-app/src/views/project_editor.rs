@@ -50,7 +50,9 @@ impl AppModel {
             return;
         };
         if matches!(field, Field::Icon) {
-            self.open_project_icons(id, position, window, cx);
+            if muxy_ui::symbols::PROJECT_ICONS {
+                self.open_project_icons(id, position, window, cx);
+            }
             return;
         }
         let text = project.name.clone();

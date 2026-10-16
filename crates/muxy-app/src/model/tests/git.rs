@@ -150,10 +150,18 @@ fn worktree_form_reviews_hooks_validates_templates_and_saves_the_submitted_locat
     cx.run_until_parked();
     cx.simulate_input("display-name");
     click_form(cx, "settings-field-git-branch");
-    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    });
     cx.simulate_input("feature/custom");
     click_form(cx, "settings-field-git-name");
-    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    });
     cx.simulate_input("Renamed worktree");
     click_form(cx, "settings-segment-worktree-location-template");
     click_form(cx, "settings-field-git-template");
@@ -166,7 +174,11 @@ fn worktree_form_reviews_hooks_validates_templates_and_saves_the_submitted_locat
             .try_iter()
             .any(|(_, work)| matches!(work, Work::Git(_)))
     );
-    cx.simulate_keystrokes("cmd-a");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    });
     cx.simulate_input("../trees/{branch}");
     click_form(cx, "settings-toggle-worktree-setup");
     click_form(cx, "settings-field-git-name");

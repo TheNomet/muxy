@@ -54,7 +54,11 @@ fn path_items(project: &Project) -> Vec<Item> {
     let copy = Item::action(tr!("Copy Path"), Command::CopyPath(project.id));
     if project.server_id.is_local() {
         vec![
-            Item::action(tr!("Reveal in Finder"), Command::RevealPath(project.id)).separated(),
+            Item::action(
+                crate::opener::reveal_label(),
+                Command::RevealPath(project.id),
+            )
+            .separated(),
             copy,
         ]
     } else {
@@ -75,10 +79,14 @@ fn removal(project: &Project) -> Vec<Item> {
 
 fn icon_items(project: &Project) -> Vec<Item> {
     let id = project.id;
-    let mut items = vec![
-        Item::action(tr!("Choose Icon…"), Command::EditProject(id, Field::Icon)),
-        Item::action(tr!("Set Logo…"), Command::ProjectLogo(id)),
-    ];
+    let mut items = Vec::new();
+    if muxy_ui::symbols::PROJECT_ICONS {
+        items.push(Item::action(
+            tr!("Choose Icon…"),
+            Command::EditProject(id, Field::Icon),
+        ));
+    }
+    items.push(Item::action(tr!("Set Logo…"), Command::ProjectLogo(id)));
     if project.logo.is_some() {
         items.push(Item::action(
             tr!("Remove Logo"),
@@ -287,9 +295,10 @@ async fn prompt(
 ) -> Result<ConfirmationResponse, String> {
     let (sender, receiver) = async_channel::bounded(1);
     let _dialog = window
-        .update(cx, |_, window, _| {
+        .update(cx, |_, window, cx| {
             muxy_ui::dialog::confirm(
                 window,
+                cx,
                 &muxy_ui::l10n::translate(title),
                 &message,
                 &muxy_ui::l10n::translate(action),

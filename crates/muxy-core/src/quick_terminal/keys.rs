@@ -143,26 +143,31 @@ impl KeyCombo {
             && supported_shortcut_key(&self.key)
     }
 
+    pub fn effective_modifiers(&self) -> u64 {
+        let modifiers = canonical_modifiers(self.modifiers);
+        if cfg!(target_os = "macos") || modifiers & COMMAND == 0 {
+            return modifiers;
+        }
+        (modifiers & !COMMAND) | CONTROL
+    }
+
     pub fn keystroke(&self) -> Option<String> {
         if !self.is_assigned() {
             return None;
         }
+        let modifiers = self.effective_modifiers();
         let mut parts = Vec::new();
-        if self.modifiers & CONTROL != 0 {
+        if modifiers & CONTROL != 0 {
             parts.push("ctrl");
         }
-        if self.modifiers & OPTION != 0 {
+        if modifiers & OPTION != 0 {
             parts.push("alt");
         }
-        if self.modifiers & SHIFT != 0 {
+        if modifiers & SHIFT != 0 {
             parts.push("shift");
         }
-        if self.modifiers & COMMAND != 0 {
-            parts.push(if cfg!(target_os = "macos") {
-                "cmd"
-            } else {
-                "ctrl"
-            });
+        if modifiers & COMMAND != 0 {
+            parts.push("cmd");
         }
         parts.push(match self.key.as_str() {
             "leftarrow" => "left",
@@ -212,5 +217,28 @@ impl KeyCombo {
             return value;
         }
         self.keystroke().unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn imported_command_modifiers_match_native_conflicts_without_rewriting_flags() {
+        let native = KeyCombo::new("return", CONTROL | OPTION | SHIFT);
+        for flags in [COMMAND | OPTION | SHIFT, COMMAND | CONTROL | OPTION | SHIFT] {
+            let imported = KeyCombo::new("return", flags);
+            if cfg!(target_os = "macos") {
+                assert!(!imported.conflicts_with(&native));
+                assert_eq!(imported.effective_modifiers(), flags);
+            } else {
+                assert!(imported.conflicts_with(&native));
+                assert_eq!(imported.keystroke(), native.keystroke());
+                assert_eq!(imported.display(), native.display());
+                assert_eq!(imported.effective_modifiers(), native.modifiers);
+            }
+            assert_eq!(imported.modifiers, flags);
+        }
     }
 }

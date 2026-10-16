@@ -19,7 +19,9 @@ fn hints_follow_the_keyboard_when_a_release_is_never_reported(cx: &mut TestAppCo
     let (boot, _requests) = stub_boot(AppState::bootstrap().expect("state"));
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
     cx.run_until_parked();
-    let command = Modifiers::command();
+    let command = Keystroke::parse(ShortcutId::SelectTab1.definition().keys[0])
+        .expect("tab shortcut")
+        .modifiers;
 
     hold(&view, command, cx);
     view.update(cx, |model, cx| model.update_shortcut_hints(command, cx));
@@ -45,7 +47,9 @@ fn hints_stay_hidden_when_the_release_is_lost_before_they_appear(cx: &mut TestAp
     let (boot, _requests) = stub_boot(AppState::bootstrap().expect("state"));
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
     cx.run_until_parked();
-    let command = Modifiers::command();
+    let command = Keystroke::parse(ShortcutId::SelectTab1.definition().keys[0])
+        .expect("tab shortcut")
+        .modifiers;
 
     hold(&view, command, cx);
     view.update(cx, |model, cx| model.update_shortcut_hints(command, cx));
@@ -62,7 +66,9 @@ fn a_reported_release_hides_hints_at_once_and_they_stay_hidden(cx: &mut TestAppC
     let (boot, _requests) = stub_boot(AppState::bootstrap().expect("state"));
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
     cx.run_until_parked();
-    let command = Modifiers::command();
+    let command = Keystroke::parse(ShortcutId::SelectTab1.definition().keys[0])
+        .expect("tab shortcut")
+        .modifiers;
 
     hold(&view, command, cx);
     view.update(cx, |model, cx| model.update_shortcut_hints(command, cx));

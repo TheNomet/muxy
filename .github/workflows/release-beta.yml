@@ -71,7 +71,9 @@ jobs:
           merge-multiple: true
           path: artifacts
       - name: Include the exact installer from this commit
-        run: cp scripts/install-muxy.sh artifacts/install-muxy.sh
+        run: |
+          cp scripts/install-muxy.sh scripts/install-desktop-linux.py artifacts/
+          cp packaging/linux/muxy-desktop.apparmor artifacts/
       - name: Publish beta prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

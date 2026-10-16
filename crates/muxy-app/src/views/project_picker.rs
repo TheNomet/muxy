@@ -416,7 +416,7 @@ impl ProjectPicker {
                 .disabled(self.session.confirmation_path().is_none()),
         ];
         if self.remote.is_none() {
-            actions.push(PickerAction::new("finder", tr!("Finder…")));
+            actions.push(PickerAction::new("finder", crate::opener::browse_label()));
             actions.push(PickerAction::new("location", tr!("Search Location…")));
         }
         actions
@@ -841,6 +841,9 @@ impl AppModel {
             while let Ok(urls) = folders.recv().await {
                 if this
                     .update(cx, |model, cx| {
+                        if urls.is_empty() {
+                            model.raise_window(cx);
+                        }
                         model
                             .pending_folders
                             .extend(urls.iter().filter_map(|url| folder_from_url(url)));
@@ -983,9 +986,10 @@ async fn create_prompt(
 ) -> Result<bool, String> {
     let (sender, receiver) = async_channel::bounded(1);
     let _dialog = window
-        .update(cx, |_, window, _| {
+        .update(cx, |_, window, cx| {
             muxy_ui::dialog::confirm(
                 window,
+                cx,
                 &tr!("Create Project Folder?"),
                 &message,
                 &tr!("Create & Add"),
@@ -1032,8 +1036,9 @@ async fn folder_prompt(
 ) -> Result<Option<PathBuf>, String> {
     let (sender, receiver) = async_channel::bounded(1);
     let _dialog = window
-        .update(cx, |_, _, _| {
+        .update(cx, |_, _, cx| {
             muxy_ui::dialog::choose_folder(
+                cx,
                 &if search_location {
                     tr!("Select where Muxy searches for project folders")
                 } else {
@@ -1047,7 +1052,10 @@ async fn folder_prompt(
         })
         .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
-    Ok(receiver.recv().await.unwrap_or_default())
+    match receiver.recv().await {
+        Ok(answer) => answer.map_err(|error| error.to_string()),
+        Err(_) => Ok(None),
+    }
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+pub(crate) mod input;
 pub(crate) mod modal;
 pub(crate) mod panel;
 pub(crate) mod popover;
@@ -8,12 +9,13 @@ use std::time::Instant;
 
 use gpui::{
     AppContext, Context, Entity, EventEmitter, FocusHandle, InteractiveElement, IntoElement,
-    ParentElement, Render, Styled, Task, Window, canvas, div, img, px,
+    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Task, Window, canvas,
+    div, img, prelude::FluentBuilder, px,
 };
 use muxy_app_core::webview::{ACKNOWLEDGEMENT_TIMEOUT, CloseRequests};
 use muxy_ui::theme::{Metrics, Theme};
 use muxy_ui::tr;
-use muxy_ui::webview::{Event, NativeWebview, assets::Source};
+use muxy_ui::webview::{Event, NativeWebview, OptionMenu, assets::Source};
 use serde_json::{Value, json};
 
 #[derive(Clone)]
@@ -74,8 +76,11 @@ impl Presentation {
         self.visible && !self.blocked && !failed
     }
 
+    /// A page the app draws is its snapshots. One the system shows keeps a
+    /// snapshot under it for when it is hidden, except where the page lets
+    /// what is behind it show through.
     fn show_snapshot(&self, modal: bool, failed: bool) -> bool {
-        !modal || !self.native_visible(failed)
+        NativeWebview::DRAWN_BY_APP || !modal || !self.native_visible(failed)
     }
 
     fn update_focus(&mut self, visible: bool, blocked: bool, focused: bool) -> Option<bool> {
@@ -104,6 +109,12 @@ pub(crate) struct Webview {
     snapshot: Option<Arc<gpui::RenderImage>>,
     error: Option<String>,
     radius: f64,
+    palette: Theme,
+    metrics: Metrics,
+    cursor: gpui::CursorStyle,
+    pointer: Rc<input::PointerState>,
+    /// The `<select>` a page the app draws has open.
+    menu: Option<OptionMenu>,
     closes: CloseRequests,
     close_results: HashMap<u64, async_channel::Sender<bool>>,
     _events: Task<()>,
@@ -126,6 +137,7 @@ impl Webview {
             kind,
         } = page;
         let theme_values = theme_snapshot(theme, metrics);
+        let theme = theme.clone();
         let script = bridge_script(&source.owner, &instance, kind, &data, &theme_values);
         let (native, events) = NativeWebview::new(
             window,
@@ -160,6 +172,11 @@ impl Webview {
                 snapshot: None,
                 error: None,
                 radius: 0.0,
+                palette: theme.clone(),
+                metrics,
+                cursor: gpui::CursorStyle::Arrow,
+                pointer: Rc::default(),
+                menu: None,
                 closes: CloseRequests::default(),
                 close_results: HashMap::new(),
                 _events: events,
@@ -247,13 +264,22 @@ impl Webview {
             }
             Event::Escape => cx.emit(SurfaceEvent::Escape),
             Event::Shortcut(key) => cx.emit(SurfaceEvent::Shortcut(key)),
+            Event::Cursor(cursor) => self.cursor = cursor,
+            Event::Copied(text) => {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                return;
+            }
+            Event::Menu(menu) => self.menu = menu,
             Event::Snapshot {
                 id,
                 generation,
                 image,
             } => {
-                if self.error.is_none()
-                    && self.native.is_current_snapshot(id, generation)
+                // Asked even when the snapshot will not be shown: a backend
+                // that paces its snapshots sends the next one after this.
+                let current = self.native.accept_snapshot(id, generation);
+                if current
+                    && self.error.is_none()
                     && let Some(image) = render_snapshot(image)
                 {
                     self.clear_snapshot(cx);
@@ -307,6 +333,8 @@ impl Webview {
         if data_changed || theme_changed {
             self.data = data;
             self.theme = values;
+            self.palette = theme.clone();
+            self.metrics = metrics;
             if data_changed {
                 self.native
                     .evaluate(&format!("window.__muxyApplyData?.({});", self.data));
@@ -349,6 +377,9 @@ impl Webview {
                     self.error.is_some()
                 ),
             );
+        }
+        if focus_change == Some(false) || !visible || blocked {
+            self.choose(None, cx);
         }
         if let Some(focused) = focus_change {
             if !focused {
@@ -410,6 +441,64 @@ impl Webview {
         receiver
     }
 
+    /// Passes a key to a page the app draws.
+    fn key(&mut self, keystroke: &gpui::Keystroke, pressed: bool, cx: &mut Context<Self>) {
+        self.native.key(keystroke, pressed, || {
+            cx.read_from_clipboard().and_then(|item| item.text())
+        });
+        cx.stop_propagation();
+    }
+
+    /// Answers the page's open `<select>`, with `None` to close it unchanged.
+    fn choose(&mut self, option: Option<usize>, cx: &mut Context<Self>) {
+        if self.menu.take().is_some() {
+            self.native.choose(option);
+            cx.notify();
+        }
+    }
+
+    fn option_menu(&self, menu: &OptionMenu, cx: &mut Context<Self>) -> impl IntoElement {
+        let rows = menu.options.iter().enumerate().map(|(index, option)| {
+            if option.heading {
+                return muxy_ui::popover::header(&self.palette, self.metrics)
+                    .child(option.label.clone())
+                    .into_any_element();
+            }
+            muxy_ui::popover::row(
+                &self.palette,
+                self.metrics,
+                ("page-option", index),
+                option.enabled,
+                option.selected,
+            )
+            .child(option.label.clone())
+            .when(option.enabled, |row| {
+                row.on_click(cx.listener(move |view, _, _, cx| view.choose(Some(index), cx)))
+            })
+            .into_any_element()
+        });
+        div()
+            .absolute()
+            .inset_0()
+            .occlude()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|view, _, _, cx| {
+                    view.choose(None, cx);
+                    cx.stop_propagation();
+                }),
+            )
+            .child(muxy_ui::popover::contained_dropdown(
+                menu.anchor,
+                px(240.0),
+                muxy_ui::popover::surface(&self.palette, self.metrics)
+                    .id("page-options")
+                    .overflow_y_scroll()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .children(rows),
+            ))
+    }
+
     fn resolve_close(&mut self, id: u64, prevent: bool) {
         crate::diagnostics::event(
             "webview.close",
@@ -442,20 +531,39 @@ impl Drop for Webview {
 }
 
 impl Render for Webview {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let native = self.native.clone();
         let background = self.background;
         let radius = self.radius;
         let failed = self.error.is_some();
         let visible = self.presentation.native_visible(failed);
+        let drawn = NativeWebview::DRAWN_BY_APP;
+        let pointer = self.pointer.clone();
+        let cursor = self.cursor;
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "A corner radius is a few points"
+        )]
+        let corners = px(radius as f32);
         div()
             .track_focus(&self.focus)
+            .when(drawn, |page| {
+                page.on_key_down(cx.listener(|view, event: &gpui::KeyDownEvent, _, cx| {
+                    view.key(&event.keystroke, true, cx);
+                }))
+                .on_key_up(cx.listener(
+                    |view, event: &gpui::KeyUpEvent, _, cx| {
+                        view.key(&event.keystroke, false, cx);
+                    },
+                ))
+            })
             .relative()
             .flex()
             .size_full()
             .min_w(px(0.0))
             .min_h(px(0.0))
             .bg(background)
+            .rounded(corners)
             .overflow_hidden()
             .children(
                 self.snapshot
@@ -466,7 +574,7 @@ impl Render for Webview {
                             failed,
                         )
                     })
-                    .map(|image| img(image).absolute().size_full()),
+                    .map(|image| img(image).absolute().size_full().rounded(corners)),
             )
             .children(
                 self.error
@@ -476,13 +584,38 @@ impl Render for Webview {
             .child(
                 canvas(
                     move |bounds, window, _| {
-                        native.sync(bounds, window.content_mask().bounds, background, radius);
+                        native.sync(
+                            bounds,
+                            window.content_mask().bounds,
+                            background,
+                            radius,
+                            window.scale_factor(),
+                        );
                         native.set_visible(visible);
+                        (drawn && visible).then(|| {
+                            let hitbox = window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal);
+                            (native, hitbox)
+                        })
                     },
-                    |_, (), _, _| (),
+                    move |bounds, page, window, _| {
+                        if let Some((native, hitbox)) = page {
+                            pointer.forward(
+                                move |event| native.pointer(event),
+                                bounds,
+                                hitbox,
+                                cursor,
+                                window,
+                            );
+                        }
+                    },
                 )
                 .absolute()
                 .size_full(),
+            )
+            .children(
+                self.menu
+                    .as_ref()
+                    .map(|menu| self.option_menu(menu, cx).into_any_element()),
             )
     }
 }

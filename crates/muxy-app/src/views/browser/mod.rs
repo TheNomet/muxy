@@ -3,14 +3,15 @@
 mod pages;
 mod toolbar;
 
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
-    IntoElement, ParentElement, Pixels, Point, Render, Styled, Subscription, Task, Window, canvas,
-    div, img, px,
+    IntoElement, ParentElement, Pixels, Point, Render, StatefulInteractiveElement, Styled,
+    Subscription, Task, Window, canvas, div, img, px,
 };
 use muxy_app_core::browser::{self, SearchEngine};
 use muxy_ui::browser::polybrowser::{
@@ -48,6 +49,7 @@ pub(crate) enum BrowserViewEvent {
 pub(crate) enum Menu {
     External,
     Profile,
+    Page,
 }
 
 /// What the page last reported.
@@ -106,12 +108,16 @@ pub(crate) struct BrowserView {
     pub(crate) engine: SearchEngine,
     address: Entity<TextInput>,
     /// The address field's width when last drawn, for its suggestions.
-    address_width: Rc<std::cell::Cell<Pixels>>,
+    address_width: Rc<Cell<Pixels>>,
     history: Option<History>,
     suggestions: Suggestions,
     find: Option<FindBar>,
     presentation: Presentation,
     snapshot: Option<Arc<gpui::RenderImage>>,
+    pointer: Rc<super::webview::input::PointerState>,
+    page_origin: Rc<Cell<Point<Pixels>>>,
+    cursor: gpui::CursorStyle,
+    menu: Option<muxy_ui::webview::OptionMenu>,
     theme: Theme,
     metrics: Metrics,
     /// The address field takes focus once the pane is shown focused.
@@ -194,6 +200,10 @@ impl BrowserView {
                 find: None,
                 presentation: Presentation::default(),
                 snapshot: None,
+                pointer: Rc::default(),
+                page_origin: Rc::default(),
+                cursor: gpui::CursorStyle::Arrow,
+                menu: None,
                 theme: theme.clone(),
                 metrics,
                 focus_address: setup.focus_address,
@@ -215,7 +225,47 @@ impl BrowserView {
 
     fn handle(&mut self, event: Event, cx: &mut Context<Self>) {
         match event {
-            Event::Page(event) => self.page_event(event, cx),
+            Event::Page { navigation, event } => {
+                if self.native.is_current_navigation(navigation) {
+                    self.page_event(event, cx);
+                }
+            }
+            Event::ContextMenu(position) => {
+                if self.presentation.visible && !self.presentation.blocked && self.shows_page() {
+                    cx.emit(BrowserViewEvent::Menu(
+                        Menu::Page,
+                        self.page_origin.get() + position,
+                    ));
+                }
+            }
+            Event::Surface(event) => match event {
+                muxy_ui::webview::Event::Snapshot {
+                    id,
+                    generation,
+                    image,
+                } => {
+                    if self.native.accept_frame(id, generation)
+                        && let Some(image) = render_snapshot(image)
+                    {
+                        self.clear_snapshot(cx);
+                        self.snapshot = Some(Arc::new(image));
+                    }
+                }
+                muxy_ui::webview::Event::Cursor(cursor) => self.cursor = cursor,
+                muxy_ui::webview::Event::Copied(text) => {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                }
+                muxy_ui::webview::Event::Menu(menu) => self.menu = menu,
+                muxy_ui::webview::Event::Failed(message) => {
+                    self.page.loading = false;
+                    self.page.error = Some(LoadError {
+                        url: self.page.url.clone(),
+                        message,
+                    });
+                }
+                muxy_ui::webview::Event::Escape => cx.emit(BrowserViewEvent::Escape),
+                _ => (),
+            },
             Event::Escape => cx.emit(BrowserViewEvent::Escape),
             Event::Shortcut(keystroke) => cx.emit(BrowserViewEvent::Shortcut(keystroke)),
             Event::Clicked => cx.emit(BrowserViewEvent::PageClicked),
@@ -618,6 +668,60 @@ impl BrowserView {
         }
     }
 
+    /// Answers the page's open `<select>`, with `None` to close it unchanged.
+    fn choose(&mut self, option: Option<usize>, cx: &mut Context<Self>) {
+        if self.menu.take().is_some() {
+            self.native.choose(option);
+            cx.notify();
+        }
+    }
+
+    fn option_menu(
+        &self,
+        menu: &muxy_ui::webview::OptionMenu,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let rows = menu.options.iter().enumerate().map(|(index, option)| {
+            if option.heading {
+                return muxy_ui::popover::header(&self.theme, self.metrics)
+                    .child(option.label.clone())
+                    .into_any_element();
+            }
+            muxy_ui::popover::row(
+                &self.theme,
+                self.metrics,
+                ("page-option", index),
+                option.enabled,
+                option.selected,
+            )
+            .child(option.label.clone())
+            .when(option.enabled, |row| {
+                row.on_click(cx.listener(move |view, _, _, cx| view.choose(Some(index), cx)))
+            })
+            .into_any_element()
+        });
+        div()
+            .absolute()
+            .inset_0()
+            .occlude()
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|view, _, _, cx| {
+                    view.choose(None, cx);
+                    cx.stop_propagation();
+                }),
+            )
+            .child(muxy_ui::popover::contained_dropdown(
+                menu.anchor,
+                px(240.0),
+                muxy_ui::popover::surface(&self.theme, self.metrics)
+                    .id("page-options")
+                    .overflow_y_scroll()
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .children(rows),
+            ))
+    }
+
     fn inputs_focused(&self, window: &Window, cx: &gpui::App) -> bool {
         self.address.focus_handle(cx).is_focused(window)
             || self
@@ -660,10 +764,12 @@ fn render_snapshot(snapshot: muxy_ui::webview::Snapshot) -> Option<gpui::RenderI
 
 impl Render for BrowserView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let native = self.native.clone();
+        let (native, pointer) = (self.native.clone(), self.pointer.clone());
+        let page_origin = self.page_origin.clone();
+        let cursor = self.cursor;
+        let drawn = NativeBrowser::DRAWN_BY_APP;
         let shown = self.presentation.visible && !self.presentation.blocked && self.shows_page();
-        let theme = self.theme.clone();
-        let metrics = self.metrics;
+        let (theme, metrics) = (self.theme.clone(), self.metrics);
         let content = div()
             .relative()
             .flex_1()
@@ -673,7 +779,7 @@ impl Render for BrowserView {
             .children(
                 self.snapshot
                     .clone()
-                    .filter(|_| self.presentation.blocked && self.shows_page())
+                    .filter(|_| (drawn || self.presentation.blocked) && self.shows_page())
                     .map(|image| img(image).absolute().size_full()),
             )
             .when(self.is_blank() && self.page.error.is_none(), |content| {
@@ -688,10 +794,32 @@ impl Render for BrowserView {
             .child(
                 canvas(
                     move |bounds, window, _| {
-                        native.sync(bounds, window.content_mask().bounds, 0.0);
+                        page_origin.set(bounds.origin);
+                        native.sync(
+                            bounds,
+                            window.content_mask().bounds,
+                            0.0,
+                            window.scale_factor(),
+                        );
                         native.set_visible(shown);
+                        (drawn && shown).then(|| {
+                            (
+                                native,
+                                window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal),
+                            )
+                        })
                     },
-                    |_, (), _, _| (),
+                    move |bounds, page, window, _| {
+                        if let Some((native, hitbox)) = page {
+                            pointer.forward(
+                                move |event| native.pointer(event),
+                                bounds,
+                                hitbox,
+                                cursor,
+                                window,
+                            );
+                        }
+                    },
                 )
                 .absolute()
                 .size_full(),
@@ -699,6 +827,24 @@ impl Render for BrowserView {
         div()
             .track_focus(&self.focus)
             .key_context("Browser")
+            .when(drawn, |page| {
+                page.on_key_down(cx.listener(|view, event: &gpui::KeyDownEvent, window, cx| {
+                    if !view.inputs_focused(window, cx) {
+                        view.native.key(&event.keystroke, true, || {
+                            cx.read_from_clipboard().and_then(|item| item.text())
+                        });
+                        cx.stop_propagation();
+                    }
+                }))
+                .on_key_up(cx.listener(
+                    |view, event: &gpui::KeyUpEvent, window, cx| {
+                        if !view.inputs_focused(window, cx) {
+                            view.native.key(&event.keystroke, false, || None);
+                            cx.stop_propagation();
+                        }
+                    },
+                ))
+            })
             .flex()
             .flex_col()
             .size_full()
@@ -711,7 +857,13 @@ impl Render for BrowserView {
             )
             .child(toolbar::render(self, window, cx))
             .children(toolbar::find_bar(self, cx))
-            .child(content)
+            .child(
+                content.children(
+                    self.menu
+                        .as_ref()
+                        .map(|menu| self.option_menu(menu, cx).into_any_element()),
+                ),
+            )
     }
 }
 

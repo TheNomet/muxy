@@ -569,7 +569,7 @@ mod probe {
                     let page = Rc::new(page);
                     let bounds =
                         gpui::Bounds::new(point(px(0.0), px(0.0)), size(px(400.0), px(300.0)));
-                    page.sync(bounds, bounds, gpui::rgb(0x00ff_ffff), 0.0);
+                    page.sync(bounds, bounds, gpui::rgb(0x00ff_ffff), 0.0, 1.0);
                     page.set_visible(true);
                     page.set_focused(true);
                     page.focus();

@@ -49,7 +49,7 @@ class InstallerTests(unittest.TestCase):
         self.tools = self.root / 'tools'
         self.tools.mkdir()
         for tool in ('mkdir', 'rmdir', 'rm', 'cp', 'ln', 'readlink', 'chmod', 'cat', 'awk',
-                     'sort', 'cmp', 'sed', 'mktemp', 'tar', 'unzip', 'shasum', 'sha256sum'):
+                     'sort', 'cmp', 'sed', 'mktemp', 'tar', 'gzip', 'unzip', 'shasum', 'sha256sum'):
             path = shutil.which(tool)
             if path:
                 (self.tools / tool).symlink_to(path)

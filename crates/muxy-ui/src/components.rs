@@ -349,6 +349,7 @@ impl RenderOnce for Separator {
 #[derive(IntoElement, Debug)]
 pub struct SymbolGlyph {
     symbol: SharedString,
+    fallback: Option<SharedString>,
     size: Pixels,
     color: Hsla,
     weight: f32,
@@ -359,12 +360,22 @@ impl SymbolGlyph {
     pub fn new(symbol: impl Into<SharedString>, size: Pixels, color: Hsla) -> Self {
         Self {
             symbol: symbol.into(),
+            fallback: None,
             size,
             color,
             weight: 0.3,
             hover: None,
         }
     }
+
+    /// The symbol drawn in place of one this system has no glyph for, such
+    /// as a name an extension chose.
+    #[must_use]
+    pub fn or(mut self, fallback: impl Into<SharedString>) -> Self {
+        self.fallback = Some(fallback.into());
+        self
+    }
+
     #[must_use]
     pub fn hover_in_group(mut self, group: impl Into<SharedString>, color: Hsla) -> Self {
         self.hover = Some((group.into(), color));
@@ -387,7 +398,20 @@ impl SymbolGlyph {
 impl RenderOnce for SymbolGlyph {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let scale = window.scale_factor();
-        let base = symbol_layer(&self.symbol, self.size, self.color, scale, self.weight);
+        let layer = |color| {
+            symbol_layer(&self.symbol, self.size, color, scale, self.weight)
+                .or_else(|| {
+                    symbol_layer(
+                        self.fallback.as_ref()?,
+                        self.size,
+                        color,
+                        scale,
+                        self.weight,
+                    )
+                })
+                .unwrap_or_else(|| div().flex_none().size(self.size))
+        };
+        let base = layer(self.color);
         let Some((group, color)) = self.hover else {
             return base.into_any_element();
         };
@@ -396,7 +420,7 @@ impl RenderOnce for SymbolGlyph {
             .flex_none()
             .child(base.group_hover(group.clone(), |style| style.opacity(0.0)))
             .child(
-                symbol_layer(&self.symbol, self.size, color, scale, self.weight)
+                layer(color)
                     .absolute()
                     .top_0()
                     .left_0()
@@ -447,14 +471,14 @@ impl TemplateGlyph {
 }
 
 impl RenderOnce for TemplateGlyph {
-    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        #[cfg(target_os = "macos")]
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         if let Some(glyph) = crate::icon::tinted_svg(
             &self.key,
             &self.bytes,
             self.size,
             self.color,
             window.scale_factor(),
+            cx,
         ) {
             return div()
                 .flex()
@@ -472,10 +496,13 @@ impl RenderOnce for TemplateGlyph {
             window.scale_factor(),
             0.3,
         )
+        .unwrap_or_else(|| div().flex_none().size(self.size))
         .into_any_element()
     }
 }
 
+/// The symbol as the system draws it, or as its bundled icon. `None` when
+/// there is neither.
 #[cfg(target_os = "macos")]
 fn symbol_layer(
     symbol: &SharedString,
@@ -483,18 +510,21 @@ fn symbol_layer(
     color: Hsla,
     scale: f32,
     weight: f32,
-) -> gpui::Div {
+) -> Option<gpui::Div> {
     let Some(glyph) = crate::icon::tinted_symbol_weight(symbol, size, color, scale, weight) else {
-        return fallback_layer(symbol, size, color);
+        return bundled_layer(symbol, size, color);
     };
-    div().flex_none().w(glyph.width).h(glyph.height).child(
-        gpui::img(glyph.image)
-            .w(glyph.width)
-            .h(glyph.height)
-            .flex_none(),
+    Some(
+        div().flex_none().w(glyph.width).h(glyph.height).child(
+            gpui::img(glyph.image)
+                .w(glyph.width)
+                .h(glyph.height)
+                .flex_none(),
+        ),
     )
 }
 
+/// The symbol as its bundled icon. `None` when it has none.
 #[cfg(not(target_os = "macos"))]
 fn symbol_layer(
     symbol: &SharedString,
@@ -502,15 +532,12 @@ fn symbol_layer(
     color: Hsla,
     _scale: f32,
     _weight: f32,
-) -> gpui::Div {
-    fallback_layer(symbol, size, color)
+) -> Option<gpui::Div> {
+    bundled_layer(symbol, size, color)
 }
 
-fn fallback_layer(symbol: &SharedString, size: Pixels, color: Hsla) -> gpui::Div {
-    match Icon::from_symbol(symbol) {
-        Some(icon) => svg_layer(icon, size, color),
-        None => div().flex_none().size(size),
-    }
+fn bundled_layer(symbol: &SharedString, size: Pixels, color: Hsla) -> Option<gpui::Div> {
+    Icon::from_symbol(symbol).map(|icon| svg_layer(icon, size, color))
 }
 
 impl std::fmt::Debug for IconButton {

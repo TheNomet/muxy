@@ -1,9 +1,13 @@
 use std::ffi::OsString;
-use std::io::{self, Read};
+use std::io;
+#[cfg(target_os = "macos")]
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(target_os = "macos")]
+use std::time::Instant;
 
 mod process;
 
@@ -16,6 +20,31 @@ use muxy_ui::tr;
 mod tests;
 
 const FINDER: &str = "com.apple.finder";
+
+/// The label key of the file manager, among the openers in Settings.
+pub(crate) const FILE_MANAGER: &str = if cfg!(target_os = "macos") {
+    "Finder"
+} else {
+    muxy_ui::l10n::tr_key!("File manager")
+};
+
+/// The menu item that shows a path in the file manager.
+pub(crate) fn reveal_label() -> gpui::SharedString {
+    if cfg!(target_os = "macos") {
+        tr!("Reveal in Finder")
+    } else {
+        tr!("Show in File Manager")
+    }
+}
+
+/// The action that picks a folder in the system's own dialog.
+pub(crate) fn browse_label() -> gpui::SharedString {
+    if cfg!(target_os = "macos") {
+        tr!("Finder…")
+    } else {
+        tr!("Browse…")
+    }
+}
 
 pub(crate) fn submit<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
@@ -63,7 +92,15 @@ fn registry() -> &'static Registry<Handler> {
             Handler::Browser,
         );
         for (id, title, handler) in [
-            ("system.finder", "Finder", Handler::Finder),
+            (
+                "system.finder",
+                if cfg!(target_os = "macos") {
+                    "Finder"
+                } else {
+                    "File Manager"
+                },
+                Handler::Finder,
+            ),
             ("system.application", "Default Application", Handler::System),
             ("system.editor", "Project Editor", Handler::Editor),
         ] {
@@ -133,18 +170,41 @@ fn open_with<'a>(
 struct Launch {
     program: PathBuf,
     args: Vec<OsString>,
+    /// A file to select in its folder, where a file manager offers that. The
+    /// program runs when none does.
+    #[cfg(not(target_os = "macos"))]
+    select: Option<PathBuf>,
 }
 
 impl Launch {
     fn system(args: impl IntoIterator<Item = OsString>) -> Self {
+        Self::program(
+            if cfg!(target_os = "macos") {
+                "/usr/bin/open"
+            } else {
+                "xdg-open"
+            },
+            args,
+        )
+    }
+
+    fn program(program: impl Into<PathBuf>, args: impl IntoIterator<Item = OsString>) -> Self {
         Self {
-            program: "/usr/bin/open".into(),
+            program: program.into(),
             args: args.into_iter().collect(),
+            #[cfg(not(target_os = "macos"))]
+            select: None,
         }
     }
 }
 
 fn launch(launch: &Launch) -> io::Result<()> {
+    #[cfg(not(target_os = "macos"))]
+    if let Some(file) = &launch.select
+        && muxy_ui::file_manager::select(file).is_ok()
+    {
+        return Ok(());
+    }
     process::run(
         Command::new(&launch.program)
             .args(&launch.args)
@@ -152,9 +212,26 @@ fn launch(launch: &Launch) -> io::Result<()> {
         Duration::from_secs(10),
     )
     .map(drop)
+    .map_err(|error| missing(&launch.program, error))
+}
+
+/// Names the program when it is what could not be found.
+fn missing(program: &Path, error: io::Error) -> io::Error {
+    if error.kind() != io::ErrorKind::NotFound {
+        return error;
+    }
+    io::Error::new(
+        io::ErrorKind::NotFound,
+        tr!(
+            "%@ is not installed, so there is nothing to open this with.",
+            program.display().to_string()
+        )
+        .to_string(),
+    )
 }
 
 /// Opens `url` with the system's handler for it, or with the app at `app`.
+#[cfg(target_os = "macos")]
 pub(crate) fn open_url(url: &str, app: Option<&Path>) -> io::Result<()> {
     let mut args = Vec::new();
     if let Some(app) = app {
@@ -162,6 +239,17 @@ pub(crate) fn open_url(url: &str, app: Option<&Path>) -> io::Result<()> {
     }
     args.push(OsString::from(url));
     launch(&Launch::system(args))
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn open_url(url: &str, app: Option<&Path>) -> io::Result<()> {
+    match app {
+        Some(app) => launch(&Launch::program(
+            "gio",
+            ["launch".into(), app.as_os_str().to_owned(), url.into()],
+        )),
+        None => launch(&Launch::system([url.into()])),
+    }
 }
 
 #[derive(Debug)]
@@ -186,13 +274,15 @@ pub(crate) fn open_with_default_app(path: &Path) -> io::Result<()> {
     launch(&Launch::system([path.as_os_str().to_owned()]))
 }
 
-/// Shows a path in Finder: a file selected in its folder, or a folder opened.
-/// A path that doesn't exist yet shows its nearest existing folder.
+/// Shows a path in the file manager: a file selected in its folder, or a
+/// folder opened. A path that doesn't exist yet shows its nearest existing
+/// folder.
 pub(crate) fn reveal(path: &Path) -> io::Result<()> {
     let existing = path.ancestors().find(|path| path.exists()).unwrap_or(path);
     launch(&finder(existing))
 }
 
+#[cfg(target_os = "macos")]
 fn finder(path: &Path) -> Launch {
     if path.is_dir() {
         Launch::system([
@@ -213,6 +303,7 @@ struct Editor {
 }
 
 impl Editor {
+    #[cfg(target_os = "macos")]
     fn command(&self, file: &FileLocation, directory: &Path) -> Launch {
         let cli = match self.bundle.as_str() {
             "com.microsoft.VSCode" => Some(("Contents/Resources/app/bin/code", true)),
@@ -270,6 +361,7 @@ fn executable(path: &Path) -> bool {
         .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
+#[cfg(target_os = "macos")]
 fn editors() -> &'static [Editor] {
     static EDITORS: OnceLock<Vec<Editor>> = OnceLock::new();
     EDITORS.get_or_init(|| {
@@ -289,6 +381,7 @@ fn editors() -> &'static [Editor] {
     })
 }
 
+#[cfg(target_os = "macos")]
 fn discover(
     root: &Path,
     depth: usize,
@@ -318,6 +411,7 @@ fn discover(
     }
 }
 
+#[cfg(target_os = "macos")]
 fn bundle_identifier(path: &Path, remaining: Duration) -> Option<String> {
     let mut child = process::run(
         Command::new("/usr/bin/plutil")
@@ -342,6 +436,7 @@ fn bundle_identifier(path: &Path, remaining: Duration) -> Option<String> {
         .map(|bundle| bundle.trim().to_owned())
 }
 
+#[cfg(target_os = "macos")]
 fn editor_rank(bundle: &str) -> Option<usize> {
     const EDITORS: &[&str] = &[
         "com.microsoft.VSCode",
@@ -373,5 +468,70 @@ fn editor_rank(bundle: &str) -> Option<usize> {
     EDITORS.iter().position(|id| *id == bundle).or_else(|| {
         (bundle.starts_with("com.jetbrains.") && !bundle.to_lowercase().contains("toolbox"))
             .then_some(100)
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn finder(path: &Path) -> Launch {
+    if path.is_dir() {
+        return Launch::system([path.as_os_str().to_owned()]);
+    }
+    let folder = path.parent().unwrap_or(path);
+    Launch {
+        select: Some(path.to_owned()),
+        ..Launch::system([folder.as_os_str().to_owned()])
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+impl Editor {
+    fn command(&self, file: &FileLocation, directory: &Path) -> Launch {
+        let mut args = vec![directory.as_os_str().to_owned()];
+        if file.path.is_dir() {
+            if file.path != directory {
+                args.push(file.path.as_os_str().to_owned());
+            }
+        } else {
+            if self.bundle != "dev.zed.Zed" {
+                args.push("--goto".into());
+            }
+            args.push(location_argument(file));
+        }
+        Launch::program(self.path.clone(), args)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn editors() -> &'static [Editor] {
+    static EDITORS: OnceLock<Vec<Editor>> = OnceLock::new();
+    EDITORS.get_or_init(|| {
+        let paths = std::env::var_os("PATH").unwrap_or_default();
+        let directories: Vec<_> = std::env::split_paths(&paths)
+            .filter(|path| path.is_absolute())
+            .collect();
+        let mut editors: Vec<_> = [
+            ("com.microsoft.VSCode", "code"),
+            ("com.microsoft.VSCodeInsiders", "code-insiders"),
+            ("com.vscodium", "codium"),
+            ("com.todesktop.230313mzl4w4u92", "cursor"),
+            ("dev.zed.Zed", "zed"),
+            ("com.exafunction.windsurf", "windsurf"),
+        ]
+        .into_iter()
+        .enumerate()
+        .filter_map(|(rank, (bundle, command))| {
+            let path = directories
+                .iter()
+                .map(|directory| directory.join(command))
+                .find(|path| executable(path))?;
+            Some(Editor {
+                bundle: bundle.into(),
+                path,
+                rank,
+            })
+        })
+        .collect();
+        editors.sort_by_key(|editor| editor.rank);
+        editors
     })
 }

@@ -4,6 +4,7 @@
 //! is updated, and stop when it is disabled, reloaded, or removed.
 
 use gpui::Context;
+use muxy_core::capability::Feature;
 
 use super::AppModel;
 use super::scripts::{read_source, runtime};
@@ -39,11 +40,12 @@ impl AppModel {
     }
 
     pub(super) fn sync_backgrounds(&mut self, cx: &mut Context<Self>) {
+        let runnable = self.supports(Feature::ExtensionScripts);
         let wanted: Vec<_> = self
             .extensions
             .registry
             .active()
-            .filter(|extension| extension.manifest.background.is_some())
+            .filter(|extension| runnable && extension.manifest.background.is_some())
             .cloned()
             .collect();
         let stale: Vec<_> = self

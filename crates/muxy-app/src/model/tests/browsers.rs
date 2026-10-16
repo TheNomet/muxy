@@ -229,16 +229,16 @@ fn urls_open_in_a_new_browser_tab_of_the_current_project(cx: &mut TestAppContext
     let (boot, _requests) = stub_boot(AppState::bootstrap().expect("state"));
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
     view.update(cx, |model, cx| {
-        model.open_url_in_browser("https://example.com".into(), cx);
+        model.open_url_in_browser("https://example.com/".into(), cx);
     });
     cx.run_until_parked();
     view.read_with(cx, |model, _| {
         let panes = model.browser_panes();
         assert_eq!(panes.len(), 1);
-        assert!(matches!(
-            &model.state.home().tabs[0].panes[0].content,
-            PaneContent::Browser(browser) if browser.url.as_deref() == Some("https://example.com")
-        ));
+        let PaneContent::Browser(browser) = &model.state.home().tabs[0].panes[0].content else {
+            panic!("opened pane should be a browser");
+        };
+        assert_eq!(browser.url.as_deref(), Some("https://example.com/"));
     });
 }
 
@@ -273,40 +273,6 @@ fn tabs_keep_the_profile_they_opened_with_when_the_default_changes(cx: &mut Test
                 .name(),
             "Default"
         );
-    });
-}
-
-#[gpui::test]
-fn deleting_a_profile_moves_its_tabs_only_once_it_is_gone(cx: &mut TestAppContext) {
-    let (boot, _requests) = stub_boot(AppState::bootstrap().expect("state"));
-    let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
-    view.update(cx, |model, _| {
-        model.add_browser_profile("Work").expect("profile");
-    });
-    let opened = call(&view, cx, "browser.open", &json!({"profile": "Work"})).expect("open");
-    let pane: PaneId = opened.as_str().expect("tab ID").parse().expect("pane");
-    view.update(cx, |model, cx| {
-        let work = saved_profile(model, pane).expect("work profile");
-        let default = model
-            .browser_profile(None)
-            .expect("default")
-            .id()
-            .to_string();
-        let missing = muxy_ui::browser::polybrowser::ProfileId::from_bytes([7; 16]).to_string();
-        model
-            .state
-            .set_browser_profile(pane, Some(missing.clone()))
-            .expect("assign");
-        assert!(model.delete_browser_profile(&missing, cx).is_err());
-        assert_eq!(saved_profile(model, pane), Some(missing));
-
-        model
-            .state
-            .set_browser_profile(pane, Some(work.clone()))
-            .expect("assign");
-        model.delete_browser_profile(&work, cx).expect("delete");
-        assert_eq!(saved_profile(model, pane), Some(default));
-        assert!(model.browser_profile(Some(&work)).is_err());
     });
 }
 

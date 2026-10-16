@@ -2056,7 +2056,11 @@ mod gpui_regression_tests {
             input.read_with(cx, |input, _| input.text().to_owned()),
             "ab"
         );
-        cx.simulate_keystrokes("cmd-left");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-left"
+        } else {
+            "home"
+        });
         assert_eq!(input.read_with(cx, |input, _| input.selected_range()), 0..0);
         mark(&input, cx, "y");
         commit(&input, cx, "Y");
@@ -2064,7 +2068,11 @@ mod gpui_regression_tests {
             input.read_with(cx, |input, _| input.text().to_owned()),
             "Yab"
         );
-        cx.simulate_keystrokes("cmd-z");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-z"
+        } else {
+            "ctrl-z"
+        });
         assert_eq!(
             input.read_with(cx, |input, _| input.text().to_owned()),
             "ab"
@@ -2076,7 +2084,11 @@ mod gpui_regression_tests {
     #[gpui::test]
     fn canceled_ime_replacing_non_bmp_selection_remains_undoable(cx: &mut TestAppContext) {
         let (input, cx) = open(cx, "a😀b");
-        cx.simulate_keystrokes("cmd-left right shift-right");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-left right shift-right"
+        } else {
+            "home right shift-right"
+        });
         assert_eq!(input.read_with(cx, |input, _| input.selected_range()), 1..5);
         cx.update(|window, cx| {
             input.update(cx, |input, cx| {
@@ -2090,7 +2102,11 @@ mod gpui_regression_tests {
             input.read_with(cx, |input, _| input.text().to_owned()),
             "ab"
         );
-        cx.simulate_keystrokes("cmd-z");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-z"
+        } else {
+            "ctrl-z"
+        });
         assert_eq!(
             input.read_with(cx, |input, _| input.text().to_owned()),
             "a😀b"
@@ -2102,7 +2118,11 @@ mod gpui_regression_tests {
                 assert_eq!(selection.map(|selection| selection.range), Some(1..3));
             });
         });
-        cx.simulate_keystrokes("cmd-shift-z");
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-shift-z"
+        } else {
+            "ctrl-shift-z"
+        });
         assert_eq!(
             input.read_with(cx, |input, _| input.text().to_owned()),
             "ab"

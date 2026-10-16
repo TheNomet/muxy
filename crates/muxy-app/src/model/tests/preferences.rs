@@ -59,30 +59,97 @@ fn settings_fields_save_on_blur_window_close_and_quit(cx: &mut TestAppContext) {
     cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
     let (view, settings) = settings_window(boot, cx);
     click_preference(settings, "settings-field-width");
-    settings.simulate_keystrokes("cmd-a 1 2 0 0");
+    settings.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a 1 2 0 0"
+    } else {
+        "ctrl-a 1 2 0 0"
+    });
     click_preference(settings, "settings-field-height");
     view.read_with(settings, |model, _| {
         assert_eq!(model.settings.window.default_size[0], 1200.0);
     });
-    settings.simulate_keystrokes("cmd-a 8 0 0");
+    settings.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a 8 0 0"
+    } else {
+        "ctrl-a 8 0 0"
+    });
     let main = view.read_with(settings, |model, _| model.window);
-    assert!(settings.simulate_close());
+    settings.dispatch_action(crate::views::settings::CloseSettings);
     view.read_with(cx, |model, _| {
         assert!(model.settings_window.is_none());
         assert_eq!(model.settings.window.default_size[1], 800.0);
     });
     let main = VisualTestContext::from_window(main, cx).into_mut();
-    main.simulate_keystrokes("cmd-,");
+    main.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-,"
+    } else {
+        "ctrl-,"
+    });
     let handle = view.read_with(main, |model, _| {
         model.settings_window.as_ref().expect("settings").window
     });
     let settings = VisualTestContext::from_window(handle.into(), main).into_mut();
     click_preference(settings, "settings-field-width");
-    settings.simulate_keystrokes("cmd-a 1 3 0 0");
+    settings.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-a 1 3 0 0"
+    } else {
+        "ctrl-a 1 3 0 0"
+    });
     view.update(settings, AppModel::quit);
     view.read_with(settings, |model, _| {
         assert_eq!(model.settings.window.default_size[0], 1300.0);
     });
+}
+
+#[gpui::test]
+fn deleted_browser_profiles_are_removed_from_the_settings_snapshot(cx: &mut TestAppContext) {
+    use crate::views::settings::BrowserChange;
+
+    let (boot, _requests) = stub_boot(AppState::bootstrap().expect("state"));
+    let (model, settings) = settings_window(boot, cx);
+    let work = model.update(settings, |model, cx| {
+        model.change_preference(
+            Change::Browser(BrowserChange::AddProfile("Work".into())),
+            cx,
+        );
+        model
+            .browser_profile(Some("Work"))
+            .expect("work")
+            .id()
+            .to_string()
+    });
+    let preferences = model.read_with(settings, |model, _| settings_view(model));
+    assert!(preferences.read_with(settings, |view, _| {
+        view.browser_profiles()
+            .iter()
+            .any(|profile| profile.id == work)
+    }));
+    model.update(settings, |model, cx| {
+        model.change_preference(
+            Change::Browser(BrowserChange::DeleteProfile(work.clone())),
+            cx,
+        );
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        settings.run_until_parked();
+        if model.read_with(settings, |model, _| {
+            !model
+                .settings_browser_profiles()
+                .iter()
+                .any(|profile| profile.id == work)
+        }) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "profile was not deleted");
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(preferences.read_with(settings, |view, _| {
+        !view
+            .browser_profiles()
+            .iter()
+            .any(|profile| profile.id == work)
+    }));
 }
 
 #[gpui::test]

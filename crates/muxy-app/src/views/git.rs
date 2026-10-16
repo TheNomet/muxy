@@ -387,6 +387,14 @@ impl AppModel {
         }));
     }
 
+    /// Git answered for `project`, and its folder is not a repository.
+    pub(crate) fn not_a_repository(&self, project: ProjectId) -> bool {
+        self.git
+            .projects
+            .get(&project)
+            .is_some_and(Repository::not_a_repository)
+    }
+
     pub(crate) fn open_git_form(
         &mut self,
         project: ProjectId,
@@ -394,9 +402,9 @@ impl AppModel {
         cx: &mut Context<Self>,
     ) {
         self.git.interaction = self.git.interaction.wrapping_add(1);
-        let Some(_) = self.state.project(project) else {
+        if self.state.project(project).is_none() || (worktree && self.not_a_repository(project)) {
             return;
-        };
+        }
         let default = self
             .git
             .projects

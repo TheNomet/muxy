@@ -1,6 +1,7 @@
 pub(crate) mod ai;
 pub(crate) mod banners;
 pub(crate) mod browsers;
+pub(crate) mod capabilities;
 mod catalog;
 pub(crate) mod commands;
 mod composer;
@@ -154,6 +155,8 @@ pub(crate) struct AppModel {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) overlay_focus: FocusHandle,
     pub(crate) focus_requested: bool,
+    /// What a requested focus goes back to, instead of the active pane.
+    pub(crate) focus_return: Option<gpui::WeakFocusHandle>,
     pub(crate) split_resize: crate::views::splits::SplitResizeState,
     pub(crate) sidebar_resize: Option<crate::views::sidebar::SidebarResize>,
     pub(crate) tab_drag: crate::views::tab_strip::TabDragState,
@@ -192,8 +195,8 @@ pub(crate) struct AppModel {
     snapshots: HashMap<PaneId, RunGrid>,
     scrolls: HashMap<PaneId, Scroll>,
     pub(crate) window_active: bool,
-    #[cfg(target_os = "macos")]
-    notifications: Option<muxy_ui::notifications::Notifications>,
+    notifications: muxy_ui::notifications::Notifications,
+    pub(crate) capabilities: muxy_core::capability::Capabilities,
     pub(crate) completions: HashSet<PaneId>,
     /// Servers still finishing their work before the app quits.
     flushing: HashSet<ServerId>,
@@ -388,6 +391,7 @@ impl AppModel {
             if self.path.with_file_name("terminal.toml").exists() {
                 self.reload_configuration(cx);
             }
+            self.notifications.refresh();
             self.refresh_git(cx);
             self.refresh_project_statuses(cx);
             self.reconnect_waiting(cx);
@@ -447,6 +451,22 @@ impl AppModel {
             }
         })
         .detach();
+        #[cfg(not(test))]
+        let (notifications, opened) = muxy_ui::notifications::Notifications::start();
+        #[cfg(test)]
+        let (notifications, opened) = muxy_ui::notifications::Notifications::absent();
+        Self::follow_notifications(opened, cx);
+        muxy_ui::webview::set_data_directory(&boot.state_path.with_file_name("webviews"));
+        let mut capabilities = capabilities::backends();
+        #[cfg(not(test))]
+        capabilities.set(
+            muxy_core::capability::Feature::QuickTerminal,
+            muxy_ui::quick_terminal::platform::capability(window),
+        );
+        capabilities.set(
+            muxy_core::capability::Feature::Notifications,
+            notifications.capability(),
+        );
         let mut model = Self {
             extensions: extensions::Runtime::new(
                 boot.state_path
@@ -515,6 +535,7 @@ impl AppModel {
             overlay: None,
             overlay_focus: cx.focus_handle(),
             focus_requested: false,
+            focus_return: None,
             split_resize: crate::views::splits::SplitResizeState::default(),
             sidebar_resize: None,
             tab_drag: crate::views::tab_strip::TabDragState::default(),
@@ -547,8 +568,8 @@ impl AppModel {
             snapshots: HashMap::new(),
             scrolls: HashMap::new(),
             window_active: window.is_window_active(),
-            #[cfg(target_os = "macos")]
-            notifications: Self::start_notifications(cx),
+            capabilities,
+            notifications,
             completions: HashSet::new(),
             flushing: HashSet::new(),
             quitting: Quitting::Idle,
@@ -2668,12 +2689,14 @@ impl Drop for AppModel {
 
 #[cfg(test)]
 mod tests {
+    mod capabilities;
     pub(super) mod extensions;
     mod webviews;
     use muxy_protocol::ExitReason;
     mod activity;
     mod ai;
     mod browsers;
+    mod commands;
     mod composer;
     mod detach;
     mod find;
@@ -2693,6 +2716,7 @@ mod tests {
     mod tab_groups;
     mod tab_menu;
     mod tui;
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     mod updates;
     mod worktrees;
 
@@ -3150,6 +3174,9 @@ mod tests {
 
     #[gpui::test]
     fn metadata_titles_and_close_confirmation_follow_the_attached_process(cx: &mut TestAppContext) {
+        let close = muxy_core::shortcuts::ShortcutId::ClosePane
+            .definition()
+            .keys[0];
         let (boot, requests) = stub_boot(AppState::bootstrap().expect("state"));
         cx.update(|cx| crate::views::workspace::bind_keys(&boot.settings.keymap, cx));
         let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
@@ -3201,7 +3228,7 @@ mod tests {
                 .to_owned()),
             "hello"
         );
-        cx.simulate_keystrokes("cmd-w");
+        cx.simulate_keystrokes(close);
         view.update(cx, acknowledge_close);
         cx.run_until_parked();
         view.read_with(cx, |model, _| {
@@ -3217,7 +3244,7 @@ mod tests {
                 crate::views::confirm::PANE_MESSAGE.into()
             ))
         );
-        cx.simulate_keystrokes("cmd-w");
+        cx.simulate_keystrokes(close);
         view.update(cx, acknowledge_close);
         cx.run_until_parked();
         cx.simulate_prompt_answer("Cancel");
@@ -3230,7 +3257,7 @@ mod tests {
                 .try_iter()
                 .any(|(_, work)| matches!(work, Work::Discard(_, _)))
         );
-        cx.simulate_keystrokes("cmd-w");
+        cx.simulate_keystrokes(close);
         view.update(cx, acknowledge_close);
         cx.run_until_parked();
         cx.simulate_prompt_answer("Close");

@@ -63,6 +63,10 @@ jobs:
         run: |
           python3 scripts/release.py promote "$BETA_TAG" "$VERSION" "$NEXT" >> "$GITHUB_OUTPUT"
           SOURCE="$(git rev-parse --verify "refs/tags/$BETA_TAG^{commit}")"
+          if ! git cat-file -e "$SOURCE:scripts/build-desktop-release-linux.sh"; then
+            echo "Error: release a beta with Linux desktop packaging before promoting it" >&2
+            exit 1
+          fi
           if [[ "$(gh release view "$BETA_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '.isPrerelease and (.isDraft | not)')" != true ]]; then
             echo "Error: $BETA_TAG is not a published beta release" >&2
             exit 1
@@ -111,7 +115,9 @@ jobs:
           merge-multiple: true
           path: artifacts
       - name: Include the exact installer from the promoted beta
-        run: cp scripts/install-muxy.sh artifacts/install-muxy.sh
+        run: |
+          cp scripts/install-muxy.sh scripts/install-desktop-linux.py artifacts/
+          cp packaging/linux/muxy-desktop.apparmor artifacts/
       - name: Publish stable release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

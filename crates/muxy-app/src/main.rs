@@ -7,6 +7,8 @@ mod cli_install;
 mod diagnostics;
 mod extensions;
 mod favicon;
+#[cfg(any(target_os = "linux", test))]
+mod instance;
 mod model;
 mod navigation;
 mod opener;
@@ -62,6 +64,7 @@ mod views {
         pub(crate) mod links;
         pub(crate) mod pane;
         pub(crate) mod scroll;
+        pub(crate) mod scrollbar;
         pub(crate) mod selection;
     }
     pub(crate) mod voice;
@@ -69,8 +72,10 @@ mod views {
     pub(crate) mod workspace;
 }
 
+use std::cell::Cell;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::rc::Rc;
 
 use gpui::{
     App, AppContext, Application, Bounds, Menu, MenuItem, OsAction, SystemMenuType,
@@ -91,6 +96,31 @@ use views::workspace::{
 };
 
 fn main() -> ExitCode {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|argument| argument == "--build-info")
+    {
+        return match serde_json::to_writer(
+            io::stdout().lock(),
+            &muxy_protocol::BuildInfo::current(),
+        ) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
+    run()
+}
+
+fn run_askpass() -> Option<ExitCode> {
+    let socket = std::env::var_os(askpass::SOCKET)?;
+    let prompt = std::env::args_os()
+        .nth(1)
+        .map(|prompt| prompt.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Some(askpass::run(&socket, &prompt))
+}
+
+fn run() -> ExitCode {
     #[cfg(target_os = "macos")]
     if std::env::args_os()
         .nth(1)
@@ -98,13 +128,29 @@ fn main() -> ExitCode {
     {
         return muxy_client::local::host::run(std::env::args_os().skip(2));
     }
-    if let Some(socket) = std::env::var_os(askpass::SOCKET) {
-        let prompt = std::env::args_os()
-            .nth(1)
-            .map(|prompt| prompt.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        return askpass::run(&socket, &prompt);
+    if let Some(exit) = run_askpass() {
+        return exit;
     }
+    #[cfg(target_os = "linux")]
+    let _installation_lease = match muxy_core::executable::current_path()
+        .and_then(|executable| muxy_client::local::bundle::acquire_runtime(&executable))
+    {
+        Ok(lease) => lease,
+        Err(error) => {
+            let _ = writeln!(io::stderr(), "muxy-app: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let (folders, opened_folders) = async_channel::unbounded();
+    #[cfg(target_os = "linux")]
+    let _instance = match instance::claim(std::env::args_os().skip(1), &folders) {
+        Ok(Some(instance)) => instance,
+        Ok(None) => return ExitCode::SUCCESS,
+        Err(error) => {
+            let _ = writeln!(io::stderr(), "muxy-app: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     muxy_ui::browser::polybrowser::init();
     let profile = profiler::init();
     let boot = {
@@ -120,10 +166,11 @@ fn main() -> ExitCode {
     #[cfg(target_os = "macos")]
     muxy_ui::native_scroll::use_overlay_scrollers();
     let application = Application::new().with_assets(muxy_ui::assets::Assets);
-    let (folders, opened_folders) = async_channel::unbounded();
     application.on_open_urls(move |urls| {
         let _ = folders.try_send(urls);
     });
+    let exit_code = Rc::new(Cell::new(ExitCode::SUCCESS));
+    let startup_exit_code = exit_code.clone();
     application.run(move |cx: &mut App| {
         if let Some(profile) = profile {
             profile.finish_on_quit(cx);
@@ -148,6 +195,8 @@ fn main() -> ExitCode {
             ..WindowOptions::default()
         };
         if let Err(error) = cx.open_window(options, |window, cx| {
+            #[cfg(target_os = "linux")]
+            views::titlebar::linux::adopt_system_frame(window, app_name());
             let model = cx.new(|cx| AppModel::new(boot, window, cx));
             model.update(cx, |_, cx| AppModel::open_folders_from(opened_folders, cx));
             model.update(cx, |model, cx| model.start_app_socket(window, cx));
@@ -165,11 +214,12 @@ fn main() -> ExitCode {
             model
         }) {
             let _ = writeln!(io::stderr(), "muxy-app: could not open window: {error}");
+            startup_exit_code.set(ExitCode::FAILURE);
             cx.quit();
         }
         cx.activate(true);
     });
-    ExitCode::SUCCESS
+    exit_code.get()
 }
 
 #[allow(
@@ -197,7 +247,9 @@ fn app_name() -> &'static str {
 
 #[allow(clippy::too_many_lines, reason = "One native menu registration list")]
 fn menus() -> Vec<Menu> {
+    use muxy_core::capability::Feature;
     use muxy_ui::text_input;
+    let backends = model::capabilities::backends();
     let mut window_items = vec![
         MenuItem::action(tr!("Minimize"), Minimize),
         MenuItem::action(tr!("Zoom"), Zoom),
@@ -228,23 +280,52 @@ fn menus() -> Vec<Menu> {
         .extend((0..9).map(|index| {
             MenuItem::action(tr!("Project %lld", index + 1), SelectProject { index })
         }));
+    let mut app_items = vec![MenuItem::action(tr!("Settings…"), OpenSettings)];
+    if backends.has_backend(Feature::Updates) {
+        app_items.push(MenuItem::action(tr!("Check for Updates…"), CheckForUpdates));
+    }
+    if backends.has_backend(Feature::CommandLineTool) {
+        app_items.push(MenuItem::action(
+            tr!("Install Command Line Tool…"),
+            InstallCommandLineTool,
+        ));
+    }
+    app_items.extend([
+        MenuItem::separator(),
+        MenuItem::os_submenu(tr!("Services"), SystemMenuType::Services),
+        MenuItem::separator(),
+        MenuItem::action(tr!("Hide %@", app_name()), HideApp),
+        MenuItem::action(tr!("Hide Others"), HideOthers),
+        MenuItem::action(tr!("Show All"), ShowAll),
+        MenuItem::separator(),
+        MenuItem::action(tr!("Quit %@", app_name()), Quit),
+        MenuItem::action(tr!("End All Sessions and Quit"), EndAllSessionsAndQuit),
+    ]);
+    let mut view_items = vec![
+        MenuItem::action(tr!("Command Palette…"), ToggleCommandPalette),
+        MenuItem::separator(),
+        MenuItem::action(tr!("Toggle Composer"), ToggleComposer),
+    ];
+    if backends.has_backend(Feature::Voice) {
+        view_items.push(MenuItem::action(
+            tr!("Toggle Voice Recording"),
+            ToggleVoiceRecording,
+        ));
+    }
+    view_items.extend([
+        MenuItem::separator(),
+        MenuItem::action(tr!("Toggle Sidebar"), ToggleSidebar),
+        MenuItem::action(tr!("Toggle Full Screen"), ToggleFullScreen),
+        MenuItem::separator(),
+        MenuItem::action(tr!("Theme Picker"), ToggleThemePicker),
+        MenuItem::separator(),
+        MenuItem::action(tr!("Increase Font Size"), IncreaseFontSize),
+        MenuItem::action(tr!("Decrease Font Size"), DecreaseFontSize),
+    ]);
     vec![
         Menu {
             name: app_name().into(),
-            items: vec![
-                MenuItem::action(tr!("Settings…"), OpenSettings),
-                MenuItem::action(tr!("Check for Updates…"), CheckForUpdates),
-                MenuItem::action(tr!("Install Command Line Tool…"), InstallCommandLineTool),
-                MenuItem::separator(),
-                MenuItem::os_submenu(tr!("Services"), SystemMenuType::Services),
-                MenuItem::separator(),
-                MenuItem::action(tr!("Hide %@", app_name()), HideApp),
-                MenuItem::action(tr!("Hide Others"), HideOthers),
-                MenuItem::action(tr!("Show All"), ShowAll),
-                MenuItem::separator(),
-                MenuItem::action(tr!("Quit %@", app_name()), Quit),
-                MenuItem::action(tr!("End All Sessions and Quit"), EndAllSessionsAndQuit),
-            ],
+            items: app_items,
         },
         Menu {
             name: tr!("Edit"),
@@ -282,20 +363,7 @@ fn menus() -> Vec<Menu> {
         },
         Menu {
             name: tr!("View"),
-            items: vec![
-                MenuItem::action(tr!("Command Palette…"), ToggleCommandPalette),
-                MenuItem::separator(),
-                MenuItem::action(tr!("Toggle Composer"), ToggleComposer),
-                MenuItem::action(tr!("Toggle Voice Recording"), ToggleVoiceRecording),
-                MenuItem::separator(),
-                MenuItem::action(tr!("Toggle Sidebar"), ToggleSidebar),
-                MenuItem::action(tr!("Toggle Full Screen"), ToggleFullScreen),
-                MenuItem::separator(),
-                MenuItem::action(tr!("Theme Picker"), ToggleThemePicker),
-                MenuItem::separator(),
-                MenuItem::action(tr!("Increase Font Size"), IncreaseFontSize),
-                MenuItem::action(tr!("Decrease Font Size"), DecreaseFontSize),
-            ],
+            items: view_items,
         },
         Menu {
             // GPUI hands macOS the window list only for a menu named "Window".

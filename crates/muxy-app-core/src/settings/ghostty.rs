@@ -14,6 +14,9 @@ pub use fonts::{FontMap, FontOptions};
 pub use native::TerminalEdit;
 pub use options::{PaddingColor, TerminalColor, TerminalOptions};
 
+#[cfg(not(target_os = "macos"))]
+const DEFAULT_CONFIG: &str = "font-family = monospace\nfont-size = 13\nadjust-cell-height = 0\n";
+#[cfg(target_os = "macos")]
 const DEFAULT_CONFIG: &str = "font-family = Menlo\nfont-size = 13\nadjust-cell-height = 0\n";
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -102,7 +105,14 @@ impl CellHeight {
 impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
-            font_families: vec!["Menlo".into()],
+            font_families: vec![
+                if cfg!(target_os = "macos") {
+                    "Menlo"
+                } else {
+                    "monospace"
+                }
+                .into(),
+            ],
             font_size: 13.0,
             cell_height: CellHeight::Natural,
             font: FontOptions::default(),

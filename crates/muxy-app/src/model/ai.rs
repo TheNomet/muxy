@@ -556,14 +556,11 @@ impl AppModel {
                 self.show_toast(title.to_string(), Some(located(detail)), cx);
             }
             Ok(Ok(Outcome::PullRequest(url))) => {
-                #[cfg(target_os = "macos")]
-                if let Some(notifications) = &self.notifications {
-                    notifications.deliver(
-                        &format!("pull-request:{url}"),
-                        &tr!("Pull request created"),
-                        &url,
-                    );
-                }
+                self.notifications.inform(
+                    &format!("pull-request:{url}"),
+                    &tr!("Pull request created"),
+                    &url,
+                );
                 self.show_toast(
                     tr!("Pull request created").to_string(),
                     Some(located(url)),

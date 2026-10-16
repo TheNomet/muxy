@@ -410,8 +410,14 @@ impl Scroll {
         rows * cell_height
     }
 
+    /// How far above the bottom the view was asked to be.
+    pub(crate) fn requested_rows(&self) -> f64 {
+        self.wanted + self.elastic
+    }
+
+    #[cfg(any(target_os = "macos", test))]
     pub(crate) fn requested_pixels(&self, cell_height: f32) -> f64 {
-        (self.wanted + self.elastic) * f64::from(cell_height)
+        self.requested_rows() * f64::from(cell_height)
     }
 }
 
