@@ -94,13 +94,11 @@ impl AppModel {
         let project = self
             .state
             .project(current.parent_id.unwrap_or(current.id))?;
-        let repository =
-            !self.worktree_children(project.id).is_empty() || !self.not_a_repository(project.id);
         (!project.home
             && project.status() == ProjectStatus::Available
             && self.worktrees_visible(project.id)
-            && repository)
-            .then_some(project.id)
+            && !self.not_a_repository(project.id))
+        .then_some(project.id)
     }
 }
 

@@ -720,6 +720,7 @@ fn new_worktree_form_stays_closed_when_the_parent_is_no_longer_a_repository(
     let (view, cx) = cx.add_window_view(|window, cx| AppModel::new(boot, window, cx));
     view.update(cx, |model, _| {
         model.git.projects.entry(root).or_default().loaded = true;
+        assert_eq!(model.new_worktree_target(), None, "the command is disabled");
     });
     cx.simulate_keystrokes("cmd-alt-n");
     view.update(cx, |model, cx| {
