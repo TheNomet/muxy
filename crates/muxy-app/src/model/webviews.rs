@@ -995,8 +995,7 @@ impl AppModel {
             },
             // Painting starts after every element, overlays included, is laid out.
             move |_, (), _, _| {
-                let covers: Vec<_> = covers.borrow().iter().map(|(_, bounds)| *bounds).collect();
-                spinners.present(&covers);
+                spinners.present(&covers.borrow());
             },
         )
         .absolute()

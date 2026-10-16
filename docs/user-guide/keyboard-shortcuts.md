@@ -29,6 +29,7 @@ For the terminal UI, see [Terminal UI keys](../features/terminal-ui.md#keys).
 | Go to project 1–9 | `Ctrl+1`–`Ctrl+9` |
 | Back / forward | `Cmd+Ctrl+Left` / `Cmd+Ctrl+Right` |
 | Toggle sidebar | `Cmd+B` |
+| Agents panel | `Cmd+Opt+A` |
 | Command palette | `Cmd+Shift+P` |
 | Theme picker | `Cmd+Shift+K` |
 | Settings | `Cmd+,` |

@@ -114,6 +114,7 @@ pub enum ShortcutId {
     NewHomeTab,
     NewTabInProject,
     ToggleSidebar,
+    ToggleAgentsPanel,
     ToggleFullScreen,
     ToggleThemePicker,
     NavigateBack,
@@ -555,6 +556,12 @@ pub const ALL: &[Shortcut] = &[
     Shortcut {
         id: "toggle_sidebar",
         keys: platform_keys!(&["cmd-b"], &["ctrl-shift-b"]),
+        contexts: &[Some("WorkspaceTabs")],
+        key_contexts: &[&[Some("WorkspaceTabs")]],
+    },
+    Shortcut {
+        id: "toggle_agents_panel",
+        keys: platform_keys!(&["cmd-alt-a"], &["ctrl-shift-alt-a"]),
         contexts: &[Some("WorkspaceTabs")],
         key_contexts: &[&[Some("WorkspaceTabs")]],
     },

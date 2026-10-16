@@ -240,7 +240,7 @@ fn row(
                             .px(m.spacing2())
                             .py(m.scaled(1.0))
                             .rounded_full()
-                            .bg(theme.surface)
+                            .bg(theme.hover)
                             .text_size(m.font_micro())
                             .font_weight(FontWeight::BOLD)
                             .child(tr!("PRIMARY")),

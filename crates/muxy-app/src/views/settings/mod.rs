@@ -119,6 +119,7 @@ pub(crate) enum Change {
     Language(String),
     Worktrees(&'static str, bool),
     SidebarCollapsedStyle(muxy_app_core::settings::SidebarCollapsedStyle),
+    AgentsPanelGrouping(muxy_app_core::settings::AgentsPanelGrouping),
     StatusBar(bool),
     Tips(bool),
     ConfirmProcess(bool),

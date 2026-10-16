@@ -1,3 +1,4 @@
+pub(crate) mod agents_panel;
 pub(crate) mod ai;
 pub(crate) mod banners;
 pub(crate) mod browsers;
@@ -161,6 +162,7 @@ pub(crate) struct AppModel {
     pub(crate) sidebar_resize: Option<crate::views::sidebar::SidebarResize>,
     #[cfg(target_os = "linux")]
     pub(crate) sidebar_available_width: gpui::Pixels,
+    pub(crate) agents_panel: agents_panel::AgentsPanel,
     pub(crate) tab_drag: crate::views::tab_strip::TabDragState,
     pub(crate) layout_drag: crate::views::splits::drag::LayoutDragState,
     pub(crate) project_logo_task: Option<Task<()>>,
@@ -542,6 +544,7 @@ impl AppModel {
             sidebar_resize: None,
             #[cfg(target_os = "linux")]
             sidebar_available_width: gpui::px(f32::MAX),
+            agents_panel: agents_panel::AgentsPanel::new(cx),
             tab_drag: crate::views::tab_strip::TabDragState::default(),
             layout_drag: crate::views::splits::drag::LayoutDragState::default(),
             #[cfg(target_os = "macos")]
@@ -2698,6 +2701,7 @@ mod tests {
     mod webviews;
     use muxy_protocol::ExitReason;
     mod activity;
+    mod agents_panel;
     mod ai;
     mod browsers;
     mod commands;

@@ -258,6 +258,8 @@ struct Registry {
 struct Native {
     spinner: Option<NativeSpinner>,
     bounds: Cell<Option<Bounds<Pixels>>>,
+    /// The element this spinner sits in, whose own cover doesn't hide it.
+    owner: Cell<Option<gpui::EntityId>>,
     in_bounds: Cell<bool>,
     visible: Cell<bool>,
 }
@@ -271,7 +273,7 @@ impl Spinners {
 
     /// Shows each spinner unless it is clipped, blocked, or under `covers`:
     /// app content painted above native views, such as a menu.
-    pub(crate) fn present(&self, covers: &[Bounds<Pixels>]) {
+    pub(crate) fn present(&self, covers: &[(Option<gpui::EntityId>, Bounds<Pixels>)]) {
         let mut registry = self.0.borrow_mut();
         let blocked = registry.blocked;
         registry.natives.retain(|native| {
@@ -280,10 +282,12 @@ impl Spinners {
             };
             let visible = !blocked
                 && native.in_bounds.get()
-                && native
-                    .bounds
-                    .get()
-                    .is_some_and(|bounds| !covers.iter().any(|cover| cover.intersects(&bounds)));
+                && native.bounds.get().is_some_and(|bounds| {
+                    let owner = native.owner.get();
+                    !covers.iter().any(|(cover_owner, cover)| {
+                        (owner.is_none() || *cover_owner != owner) && cover.intersects(&bounds)
+                    })
+                });
             native.visible.set(visible);
             if let Some(spinner) = &native.spinner {
                 spinner.set_visible(visible);
@@ -293,6 +297,18 @@ impl Spinners {
     }
 
     fn glyph(&self, id: String, size: Pixels, color: Hsla) -> AnyElement {
+        self.glyph_in(id, size, color, None)
+    }
+
+    /// A spinner inside `owner`'s element, which marks its own area with
+    /// `webview_occlusion_except(owner)` and must not hide it.
+    pub(super) fn glyph_in(
+        &self,
+        id: String,
+        size: Pixels,
+        color: Hsla,
+        owner: Option<gpui::EntityId>,
+    ) -> AnyElement {
         let registry = self.0.clone();
         canvas(
             |_, _, _| (),
@@ -308,6 +324,7 @@ impl Spinners {
                                     NativeSpinner::new(window).ok()
                                 },
                                 bounds: Cell::new(None),
+                                owner: Cell::new(None),
                                 in_bounds: Cell::new(false),
                                 visible: Cell::new(false),
                             });
@@ -317,6 +334,7 @@ impl Spinners {
                         });
                         let mask = window.content_mask().bounds;
                         native.bounds.set(Some(bounds));
+                        native.owner.set(owner);
                         native.in_bounds.set(
                             mask.contains(&bounds.origin) && mask.contains(&bounds.bottom_right()),
                         );
@@ -356,7 +374,17 @@ impl Spinners {
         clippy::unused_self,
         reason = "GPUI clips its own overlays; only AppKit needs this hook"
     )]
-    pub(crate) fn present(&self, _covers: &[Bounds<Pixels>]) {}
+    pub(crate) fn present(&self, _covers: &[(Option<gpui::EntityId>, Bounds<Pixels>)]) {}
+
+    pub(super) fn glyph_in(
+        &self,
+        id: String,
+        size: Pixels,
+        color: Hsla,
+        _owner: Option<gpui::EntityId>,
+    ) -> AnyElement {
+        self.glyph(id, size, color)
+    }
 
     fn glyph(&self, id: String, size: Pixels, color: Hsla) -> AnyElement {
         let registry = self.0.clone();
@@ -435,6 +463,18 @@ impl Spinners {
 /// An indeterminate spinner in the accent color.
 pub(super) fn spinner(id: impl Into<String>, size: Pixels, model: &AppModel) -> AnyElement {
     model.spinners.glyph(id.into(), size, model.theme.accent)
+}
+
+/// A spinner inside an element marked with `webview_occlusion_except(owner)`.
+pub(super) fn spinner_in(
+    id: impl Into<String>,
+    size: Pixels,
+    owner: gpui::EntityId,
+    model: &AppModel,
+) -> AnyElement {
+    model
+        .spinners
+        .glyph_in(id.into(), size, model.theme.accent, Some(owner))
 }
 
 pub(super) fn status_glyph(

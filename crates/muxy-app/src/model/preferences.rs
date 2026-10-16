@@ -379,6 +379,10 @@ impl AppModel {
                 settings.appearance.sidebar_collapsed_style = style;
                 settings.appearance = settings.appearance.save_changes(&self.appearance, &path)?;
             }
+            Change::AgentsPanelGrouping(grouping) => {
+                settings.appearance.agents_panel_grouping = grouping;
+                settings.appearance = settings.appearance.save_changes(&self.appearance, &path)?;
+            }
             Change::SidebarVibrancy(value) => {
                 settings.appearance.sidebar_vibrancy = value;
                 settings.appearance = settings.appearance.save_changes(&self.appearance, &path)?;
@@ -945,6 +949,7 @@ fn change_id(change: &Change) -> &str {
         Change::Language(_) => "app-language",
         Change::Worktrees(key, _) => key,
         Change::SidebarCollapsedStyle(_) => "sidebar-collapsed-style",
+        Change::AgentsPanelGrouping(_) => "agents-panel-grouping",
         Change::StatusBar(_) => "status-bar",
         Change::Tips(_) => "tips",
         Change::ConfirmProcess(_) => "confirm-process",

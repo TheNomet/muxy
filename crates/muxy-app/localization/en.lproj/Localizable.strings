@@ -61,12 +61,14 @@
 "%lld Changes" = "%lld Changes";
 "%lld Existing Terminals" = "%lld Existing Terminals";
 "%lld failing" = "%lld failing";
+"%lld need input" = "%lld need input";
 "%lld of %lld" = "%lld of %lld";
 "%lld of %lld…" = "%lld of %lld…";
 "%lld offline" = "%lld offline";
 "%lld passed" = "%lld passed";
 "%lld running" = "%lld running";
 "%lld unread notifications" = "%lld unread notifications";
+"%lld working" = "%lld working";
 "%lld%%" = "%lld%%";
 "%lld/%lld passing" = "%lld/%lld passing";
 "%lld/%lld terminals sent. %@ Draft preserved; check the terminal before retrying." = "%lld/%lld terminals sent. %@ Draft preserved; check the terminal before retrying.";
@@ -120,7 +122,10 @@
 "Adjust smooth scrolling speed." = "Adjust smooth scrolling speed.";
 "Adjust the space above and below terminal text." = "Adjust the space above and below terminal text.";
 "Adjust the space to the left and right of terminal text." = "Adjust the space to the left and right of terminal text.";
+"Agents" = "Agents";
 "Agents Focused" = "Agents Focused";
+"Agents Panel" = "Agents Panel";
+"Agents panel rows" = "Agents panel rows";
 "All Projects" = "All Projects";
 "All extensions are up to date." = "All extensions are up to date.";
 "All running terminal sessions on %@ will end. Saved terminal output and settings will remain." = "All running terminal sessions on %@ will end. Saved terminal output and settings will remain.";
@@ -350,6 +355,7 @@
 "Committed and pushed" = "Committed and pushed";
 "Committed locally" = "Committed locally";
 "Committing" = "Committing";
+"Completed" = "Completed";
 "Composer" = "Composer";
 "Composer font" = "Composer font";
 "Composer image storage is unavailable" = "Composer image storage is unavailable";
@@ -650,6 +656,7 @@
 "Height" = "Height";
 "Height in pixels for a new workspace window when no saved bounds exist." = "Height in pixels for a new workspace window when no saved bounds exist.";
 "Hidden" = "Hidden";
+"Hide" = "Hide";
 "Hide %@" = "Hide %@";
 "Hide Others" = "Hide Others";
 "Hide Tips" = "Hide Tips";
@@ -670,6 +677,7 @@
 "Icons" = "Icons";
 "Identity file" = "Identity file";
 "Identity file (automatic)" = "Identity file (automatic)";
+"Idle" = "Idle";
 "Ignore key" = "Ignore key";
 "Image submission" = "Image submission";
 "Import cancelled." = "Import cancelled.";
@@ -756,6 +764,7 @@
 "Lime" = "Lime";
 "Line spacing" = "Line spacing";
 "Line spacing from 1.1 to 2.0." = "Line spacing from 1.1 to 2.0.";
+"List each agent and open its pane, or each project and worktree running agents and open it." = "List each agent and open its pane, or each project and worktree running agents and open it.";
 "Listening on port %lld" = "Listening on port %lld";
 "Listening..." = "Listening...";
 "Listening…" = "Listening…";
@@ -852,6 +861,7 @@
 "Muxy will update and restart when all %lld terminal session end, including idle and detached sessions. Keep Muxy open to finish the update." = "Muxy will update and restart when all %lld terminal session end, including idle and detached sessions. Keep Muxy open to finish the update.";
 "Muxy will update and restart when all %lld terminal sessions end, including idle and detached sessions. Keep Muxy open to finish the update." = "Muxy will update and restart when all %lld terminal sessions end, including idle and detached sessions. Keep Muxy open to finish the update.";
 "Name" = "Name";
+"Needs input" = "Needs input";
 "Needs your attention" = "Needs your attention";
 "Neither" = "Neither";
 "Network port phones connect to, from 1024 to 65535." = "Network port phones connect to, from 1024 to 65535.";
@@ -879,6 +889,7 @@
 "Next match" = "Next match";
 "No Muxy 1.x configuration was found on this computer. Choose a 1.x backup file instead." = "No Muxy 1.x configuration was found on this computer. Choose a 1.x backup file instead.";
 "No Shortcut" = "No Shortcut";
+"No agents running" = "No agents running";
 "No commit was created" = "No commit was created";
 "No custom commands yet." = "No custom commands yet.";
 "No custom key bindings yet." = "No custom key bindings yet.";
@@ -1038,6 +1049,7 @@
 "Range" = "Range";
 "Reading changes" = "Reading changes";
 "Ready" = "Ready";
+"Reattach to Sidebar" = "Reattach to Sidebar";
 "Rebase" = "Rebase";
 "Rebase and Merge" = "Rebase and Merge";
 "Reconnect" = "Reconnect";
@@ -1390,6 +1402,7 @@
 "This signs out and removes all cookies, cache, history, and logins for this profile, including imported ones." = "This signs out and removes all cookies, cache, history, and logins for this profile, including imported ones.";
 "This update requires a server restart" = "This update requires a server restart";
 "To pair a phone, turn on Settings → Mobile → Allow mobile devices and click Show Pairing Code, or run muxy mobile enable and then muxy mobile pair." = "To pair a phone, turn on Settings → Mobile → Allow mobile devices and click Show Pairing Code, or run muxy mobile enable and then muxy mobile pair.";
+"Toggle Agents Panel" = "Toggle Agents Panel";
 "Toggle Composer" = "Toggle Composer";
 "Toggle Full Screen" = "Toggle Full Screen";
 "Toggle Pane Zoom" = "Toggle Pane Zoom";
@@ -1509,6 +1522,7 @@
 "Work is in progress." = "Work is in progress.";
 "Work is paused." = "Work is paused.";
 "Work reported an error." = "Work reported an error.";
+"Working" = "Working";
 "Working over SSH? Run muxy on that machine for tabs and splits in the terminal, and press Ctrl-B then ? to see its keys." = "Working over SSH? Run muxy on that machine for tabs and splits in the terminal, and press Ctrl-B then ? to see its keys.";
 "Workspaces" = "Workspaces";
 "Worktree created, but its location preference could not be saved: %@" = "Worktree created, but its location preference could not be saved: %@";
@@ -1692,6 +1706,7 @@
 "text input up" = "text input up";
 "text input word left" = "text input word left";
 "text input word right" = "text input word right";
+"toggle agents panel" = "toggle agents panel";
 "toggle command palette" = "toggle command palette";
 "toggle composer" = "toggle composer";
 "toggle full screen" = "toggle full screen";

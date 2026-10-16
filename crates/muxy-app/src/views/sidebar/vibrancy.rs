@@ -43,7 +43,7 @@ fn background(appearance: &Appearance, theme: &Theme, available: bool) -> Hsla {
         return theme.bg;
     }
     if !available || !enabled(appearance) {
-        return theme.raised();
+        return theme.bg;
     }
     let mut color = theme.bg;
     color.a = 1.0 - f32::from(appearance.sidebar_vibrancy_level.min(100)) / 100.0;

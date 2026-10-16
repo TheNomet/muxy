@@ -32,6 +32,17 @@ pub enum SidebarCollapsedStyle {
     Hidden,
 }
 
+/// What each row of the agents panel stands for.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentsPanelGrouping {
+    /// One row per agent, grouped by what it is doing; a row opens its pane.
+    #[default]
+    Agents,
+    /// One row per project or worktree running agents; a row opens it.
+    Worktrees,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 #[allow(
@@ -62,6 +73,14 @@ pub struct Appearance {
     pub extension_sidebar: String,
     /// The app language as `<extension>:<localization>`; empty for English.
     pub language: String,
+    pub agents_panel_visible: bool,
+    /// Whether the agents panel floats over the workspace instead of sitting in the sidebar.
+    pub agents_panel_detached: bool,
+    /// The floating agents panel as unscaled `[x, y, width, height]` in the window.
+    pub agents_panel_frame: Option<[f32; 4]>,
+    /// The docked agents panel's unscaled height; unset grows it to fit, up to a limit.
+    pub agents_panel_docked_height: Option<f32>,
+    pub agents_panel_grouping: AgentsPanelGrouping,
 }
 
 impl Default for Appearance {
@@ -86,6 +105,11 @@ impl Default for Appearance {
             sidebar_project_order: ProjectOrder::default(),
             extension_sidebar: String::new(),
             language: String::new(),
+            agents_panel_visible: false,
+            agents_panel_detached: false,
+            agents_panel_frame: None,
+            agents_panel_docked_height: None,
+            agents_panel_grouping: AgentsPanelGrouping::default(),
         }
     }
 }

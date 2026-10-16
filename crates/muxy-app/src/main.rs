@@ -20,6 +20,7 @@ mod server;
 mod theme;
 mod updater;
 mod views {
+    pub(crate) mod agents_panel;
     pub(crate) mod banners;
     pub(crate) mod browser;
     pub(crate) mod cached;
@@ -90,9 +91,9 @@ use views::workspace::{
     FocusPaneUp, HideApp, HideOthers, IncreaseFontSize, InstallCommandLineTool, Minimize,
     NewBrowserTab, NewHomeTab, NewTab, NewTabInProject, NextProject, NextPrompt, NextTab,
     OpenSettings, PreviousProject, PreviousPrompt, PreviousTab, Quit, SelectCommandOutput,
-    SelectProject, SelectTab, ShowAll, SplitDown, SplitRight, ToggleCommandPalette, ToggleComposer,
-    ToggleFullScreen, ToggleSidebar, ToggleThemePicker, ToggleVoiceRecording, ToggleZoomPane, Zoom,
-    bind_keys,
+    SelectProject, SelectTab, ShowAll, SplitDown, SplitRight, ToggleAgentsPanel,
+    ToggleCommandPalette, ToggleComposer, ToggleFullScreen, ToggleSidebar, ToggleThemePicker,
+    ToggleVoiceRecording, ToggleZoomPane, Zoom, bind_keys,
 };
 
 fn main() -> ExitCode {
@@ -317,6 +318,7 @@ fn menus() -> Vec<Menu> {
     view_items.extend([
         MenuItem::separator(),
         MenuItem::action(tr!("Toggle Sidebar"), ToggleSidebar),
+        MenuItem::action(tr!("Toggle Agents Panel"), ToggleAgentsPanel),
         MenuItem::action(tr!("Toggle Full Screen"), ToggleFullScreen),
         MenuItem::separator(),
         MenuItem::action(tr!("Theme Picker"), ToggleThemePicker),

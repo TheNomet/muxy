@@ -20,7 +20,9 @@ pub use worktrees::{
     sanitized_component,
 };
 
-pub use appearance::{AppLayout, Appearance, ProjectOrder, SidebarCollapsedStyle};
+pub use appearance::{
+    AgentsPanelGrouping, AppLayout, Appearance, ProjectOrder, SidebarCollapsedStyle,
+};
 pub use browser::BrowserSettings;
 pub use chord::KeyChord;
 pub use commands::CustomCommand;

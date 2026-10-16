@@ -1,7 +1,7 @@
 use super::{Category, Change, PickerKind, SettingsEvent, SettingsView, Snapshot};
 use gpui::{AnyElement, Context, InteractiveElement, IntoElement};
 use muxy_app_core::localization;
-use muxy_app_core::settings::{CloseBehavior, SidebarCollapsedStyle};
+use muxy_app_core::settings::{AgentsPanelGrouping, CloseBehavior, SidebarCollapsedStyle};
 use muxy_ui::controls::{self, Choice};
 use muxy_ui::l10n::{tr_key, translate};
 use muxy_ui::tr;
@@ -181,6 +181,9 @@ pub(super) fn rows(
             pane.picker(PickerKind::ExtensionSidebar, selected, cx),
         ));
     }
+    if category == Category::Appearance && pane.matches(category, tr_key!("Agents panel rows")) {
+        rows.push(agents_panel_grouping(pane, cx));
+    }
     if category == Category::General && pane.matches(category, tr_key!("Open files with")) {
         rows.push(pane.row(
             "file-opener",
@@ -277,6 +280,37 @@ pub(super) fn language_label(snapshot: &Snapshot, selected: &str) -> String {
             },
             |(_, label)| label.clone(),
         )
+}
+
+/// Whether the agents panel lists each agent, opening its pane, or each
+/// worktree running agents, opening the worktree.
+fn agents_panel_grouping(pane: &SettingsView, cx: &mut Context<SettingsView>) -> AnyElement {
+    let appearance = &pane.snapshot.settings.appearance;
+    pane.row(
+        "agents-panel-grouping",
+        tr_key!("Agents panel rows"),
+        controls::segmented(
+            pane.style(),
+            "agents-panel-grouping",
+            &[
+                Choice::new("agents", tr!("Agents")),
+                Choice::new("worktrees", tr!("Worktrees")),
+            ],
+            match appearance.agents_panel_grouping {
+                AgentsPanelGrouping::Agents => "agents",
+                AgentsPanelGrouping::Worktrees => "worktrees",
+            },
+            cx.listener(|_, selected: &gpui::SharedString, _, cx| {
+                cx.emit(SettingsEvent::Change(Change::AgentsPanelGrouping(
+                    if selected.as_ref() == "worktrees" {
+                        AgentsPanelGrouping::Worktrees
+                    } else {
+                        AgentsPanelGrouping::Agents
+                    },
+                )));
+            }),
+        ),
+    )
 }
 
 fn collapsed_sidebar_style(pane: &SettingsView, cx: &mut Context<SettingsView>) -> AnyElement {

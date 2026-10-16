@@ -5,7 +5,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 /// Work the model sent, kept so worktree syncs stay pending until a test answers them.
-struct Sent(std::sync::mpsc::Receiver<(u64, Work)>, Vec<Work>);
+pub(super) struct Sent(std::sync::mpsc::Receiver<(u64, Work)>, Vec<Work>);
 
 impl Sent {
     fn take(&mut self) -> &[Work] {
@@ -36,7 +36,7 @@ fn worktree(directory: &[u8], primary: bool) -> GitWorktree {
     }
 }
 
-fn connected(
+pub(super) fn connected(
     state: AppState,
     cx: &mut TestAppContext,
 ) -> (Entity<AppModel>, &mut VisualTestContext, Sent) {
@@ -78,7 +78,7 @@ fn listed_worktrees_skip_the_main_checkout_leftovers_and_the_projects_own_folder
     ));
 }
 
-fn pruning_fixture() -> (AppState, ProjectId, [ProjectId; 3], tempfile::TempDir) {
+pub(super) fn pruning_fixture() -> (AppState, ProjectId, [ProjectId; 3], tempfile::TempDir) {
     let (mut state, root) = registered_current_project();
     let directory = tempfile::tempdir().expect("worktrees");
     let children = [(); 3].map(|()| ProjectId::new());

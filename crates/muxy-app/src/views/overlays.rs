@@ -33,6 +33,8 @@ pub(crate) enum Overlay {
     Projects(Entity<super::project_picker::ProjectPicker>),
     /// The popover above the sidebar's Remote section.
     RemoteServers,
+    /// The agents panel opened from a collapsed sidebar.
+    Agents,
     ServerForm(Box<super::remote_servers::ServerForm>),
     Password(Box<super::remote_servers::PasswordPrompt>),
 }
@@ -47,6 +49,7 @@ impl Overlay {
                 | Self::Server
                 | Self::Tip
                 | Self::RemoteServers
+                | Self::Agents
                 | Self::Git(_)
                 | Self::GitForm(_)
                 | Self::AiProvider(_)
@@ -178,6 +181,7 @@ pub(crate) fn layer(model: &AppModel, window: &Window, cx: &mut Context<AppModel
                 let _ = model.update(cx, AppModel::dismiss_overlay);
             })
         }
+        Some(Overlay::Agents) => super::agents_panel::popup(model, window, cx),
         Some(Overlay::ServerForm(form)) => centered(marked(
             super::remote_servers::render_form(form, model, window, cx),
             model,

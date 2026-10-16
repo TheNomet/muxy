@@ -399,6 +399,15 @@ pub(super) const SETTINGS: &[Setting] = &[
         section: tr_key!("Interface"),
     },
     Setting {
+        id: "agents-panel-grouping",
+        label: tr_key!("Agents panel rows"),
+        description: tr_key!(
+            "List each agent and open its pane, or each project and worktree running agents and open it."
+        ),
+        category: Category::Appearance,
+        section: tr_key!("Agents Panel"),
+    },
+    Setting {
         id: "font-family",
         label: tr_key!("Font family"),
         description: tr_key!("The typeface used to render text in every terminal pane."),

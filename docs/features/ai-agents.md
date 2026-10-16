@@ -50,6 +50,23 @@ or finishes working.
 Alerts live in memory on the server, at most one per terminal. Restarting the
 server clears them.
 
+## Agents panel
+
+`Cmd+Opt+A` shows the agents panel, focuses it, and hides it once it has
+focus. Use the arrow keys and Return to open a row.
+
+- It sits at the bottom of the expanded sidebar; drag its top edge to make it
+  taller or shorter. With the sidebar collapsed it
+  opens as a popup that closes when you click elsewhere. Once you have shown
+  the panel, the collapsed sidebar keeps a button for it until you hide it.
+- **Detach** floats it over the workspace. Drag its header to move it and its
+  edges or corner to resize it; Muxy remembers where. **Reattach to Sidebar** docks it
+  again.
+- **Settings → Appearance → Agents panel rows** lists each agent, grouped as
+  needs input, working, completed, and idle, where Return opens its pane; or
+  each project and worktree running agents, with counts, where Return opens
+  the worktree.
+
 ## Agents Focused sidebar
 
 Choose **Agents Focused** from the sidebar layout menu to list only the tabs
