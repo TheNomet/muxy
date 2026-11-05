@@ -62,8 +62,10 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn start(language: String, model: String) -> Result<Self, String> {
-        backend::start(language, model)
+    /// Starts dictation that expects the words in `vocabulary`, such as a
+    /// project's names and jargon.
+    pub fn start(language: String, model: String, vocabulary: Vec<String>) -> Result<Self, String> {
+        backend::start(language, model, vocabulary)
     }
 
     pub fn snapshot(&self) -> Snapshot {

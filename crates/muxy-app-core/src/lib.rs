@@ -6,6 +6,7 @@
 pub mod backup;
 pub mod browser;
 pub mod composer;
+pub mod dictionary;
 mod error;
 pub mod extensions;
 mod groups;

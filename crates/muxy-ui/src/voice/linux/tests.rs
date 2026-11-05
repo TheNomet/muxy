@@ -60,7 +60,7 @@ fn gone(pid: &str) -> bool {
 }
 
 const AUDIO: &str = "assert sys.argv[sys.argv.index('--server') + 1].startswith('unix:/')\nassert '--device=@DEFAULT_SOURCE@' in sys.argv\nwhile True:\n    os.write(1, b'\\x00\\x10' * 1600)\n    time.sleep(0.01)";
-const TRANSCRIPT: &str = "data = sys.stdin.buffer.read()\nassert data[:4] == b'RIFF' and data[8:16] == b'WAVEfmt '\nassert int.from_bytes(data[40:44], 'little') == len(data) - 44\nassert data[44:] and len(data[44:]) % 2 == 0\nassert sys.argv[sys.argv.index('--file') + 1] == '-'\nassert sys.argv[sys.argv.index('--language') + 1] == 'de'\nassert sys.argv[sys.argv.index('--model') + 1].endswith('model $(touch injected).bin')\nassert '--no-gpu' in sys.argv and '--translate' not in sys.argv\nprint(' Hallo Welt. ')";
+const TRANSCRIPT: &str = "data = sys.stdin.buffer.read()\nassert data[:4] == b'RIFF' and data[8:16] == b'WAVEfmt '\nassert int.from_bytes(data[40:44], 'little') == len(data) - 44\nassert data[44:] and len(data[44:]) % 2 == 0\nassert sys.argv[sys.argv.index('--file') + 1] == '-'\nassert sys.argv[sys.argv.index('--language') + 1] == 'de'\nassert sys.argv[sys.argv.index('--model') + 1].endswith('model $(touch injected).bin')\nassert '--no-gpu' in sys.argv and '--translate' not in sys.argv\nassert sys.argv[sys.argv.index('--prompt') + 1] == 'Muxy, $(touch injected).'\nprint(' Hallo Welt. ')";
 
 #[test]
 fn pause_releases_the_device_resume_reopens_and_finish_delivers_local_audio() {
@@ -71,7 +71,15 @@ fn pause_releases_the_device_resume_reopens_and_finish_delivers_local_audio() {
     let recorder = Recorder {
         shared: shared.clone(),
     };
-    let worker = std::thread::spawn(move || record(&tools, &model, "de", &shared));
+    let worker = std::thread::spawn(move || {
+        record(
+            &tools,
+            &model,
+            "de",
+            Some("Muxy, $(touch injected)."),
+            &shared,
+        )
+    });
     until(|| recorder.snapshot().phase == Phase::Recording);
     let first = fixture.pid("capture");
     recorder.pause(true);
@@ -163,6 +171,7 @@ fn real_models_reject_keyboard_noise_and_transcribe_speech_from_memory() {
             &tools,
             &validate_model(&model).expect("multilingual model"),
             "en",
+            None,
             keyboard_noise(),
             &Shared::default(),
             TRANSCRIPTION_TIMEOUT,
@@ -174,6 +183,7 @@ fn real_models_reject_keyboard_noise_and_transcribe_speech_from_memory() {
         &tools,
         &validate_model(&model).expect("multilingual model"),
         "en",
+        None,
         pcm,
         &Shared::default(),
         TRANSCRIPTION_TIMEOUT,

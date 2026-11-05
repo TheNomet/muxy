@@ -122,10 +122,12 @@ impl AppModel {
                 cx,
             )
         });
+        let dictionary = self.dictionary();
         view.update(cx, |view, _| {
             view.error = error;
             view.sending = self.composer.submission.is_some();
             view.dictation = self.capabilities.get(Feature::Voice).clone();
+            view.dictionary = dictionary;
         });
         self.place_composer_panel(&view, cx);
         self.composer.subscription = Some(cx.subscribe(&view, |model, _, event, cx| match event {

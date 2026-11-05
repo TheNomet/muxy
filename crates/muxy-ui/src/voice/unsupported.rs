@@ -8,7 +8,11 @@ pub fn languages() -> Vec<Language> {
     Vec::new()
 }
 
-pub(super) fn start(_language: String, _model: String) -> Result<Recorder, String> {
+pub(super) fn start(
+    _language: String,
+    _model: String,
+    _vocabulary: Vec<String>,
+) -> Result<Recorder, String> {
     Err(muxy_core::capability::Feature::Voice
         .unsupported_reason()
         .into_owned())

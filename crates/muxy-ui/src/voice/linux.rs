@@ -25,6 +25,8 @@ const MAX_AUDIO: usize = BYTES_PER_SECOND as usize * 600;
 const MAX_TRANSCRIPT: usize = 256 * 1024;
 const CAPTURE_IDLE: Duration = Duration::from_secs(10);
 const TRANSCRIPTION_TIMEOUT: Duration = Duration::from_secs(600);
+/// Whisper keeps at most 224 prompt tokens, about this many bytes of words.
+const MAX_PROMPT: usize = 600;
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 
 struct Session;
@@ -41,7 +43,11 @@ struct Tools {
     speech_model: PathBuf,
 }
 
-pub(super) fn start(language: String, model: String) -> Result<Recorder, String> {
+pub(super) fn start(
+    language: String,
+    model: String,
+    vocabulary: Vec<String>,
+) -> Result<Recorder, String> {
     if ACTIVE.swap(true, Ordering::AcqRel) {
         return Err(tr!("Dictation is already active. Finish or cancel it first.").into());
     }
@@ -52,9 +58,10 @@ pub(super) fn start(language: String, model: String) -> Result<Recorder, String>
         .name("offline-dictation".into())
         .spawn(move || {
             let _session = session;
+            let prompt = prompt(&vocabulary);
             let result = prepare(&model, &worker).and_then(|(tools, model)| {
                 let language = languages::resolve(&language)?;
-                record(&tools, &model, &language, &worker)
+                record(&tools, &model, &language, prompt.as_deref(), &worker)
             });
             if let Err(error) = result {
                 let mut snapshot = worker
@@ -185,7 +192,27 @@ fn executable(name: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| tr!("Install %@ to use offline dictation.", name).into())
 }
 
-fn record(tools: &Tools, model: &Path, language: &str, shared: &Shared) -> Result<(), String> {
+/// The words whisper should expect, as many as fit its prompt.
+fn prompt(vocabulary: &[String]) -> Option<String> {
+    let mut prompt = String::new();
+    for word in vocabulary {
+        let separator = if prompt.is_empty() { "" } else { ", " };
+        if prompt.len() + separator.len() + word.len() + 1 > MAX_PROMPT {
+            break;
+        }
+        prompt.push_str(separator);
+        prompt.push_str(word);
+    }
+    (!prompt.is_empty()).then(|| prompt + ".")
+}
+
+fn record(
+    tools: &Tools,
+    model: &Path,
+    language: &str,
+    prompt: Option<&str>,
+    shared: &Shared,
+) -> Result<(), String> {
     let audio = capture(tools, shared, CAPTURE_IDLE, MAX_AUDIO)?;
     if shared.cancelled.load(Ordering::Acquire) {
         return Ok(());
@@ -194,7 +221,15 @@ fn record(tools: &Tools, model: &Path, language: &str, shared: &Shared) -> Resul
     let transcript = if audio.is_empty() || audio.iter().all(|byte| *byte == 0) {
         String::new()
     } else {
-        transcribe(tools, model, language, audio, shared, TRANSCRIPTION_TIMEOUT)?
+        transcribe(
+            tools,
+            model,
+            language,
+            prompt,
+            audio,
+            shared,
+            TRANSCRIPTION_TIMEOUT,
+        )?
     };
     if !shared.cancelled.load(Ordering::Acquire) {
         let mut snapshot = shared
@@ -296,6 +331,7 @@ fn transcribe(
     tools: &Tools,
     model: &Path,
     language: &str,
+    prompt: Option<&str>,
     audio: Vec<u8>,
     shared: &Shared,
     timeout: Duration,
@@ -322,6 +358,9 @@ fn transcribe(
             "--threads",
         ])
         .arg(threads.to_string());
+    if let Some(prompt) = prompt {
+        command.arg("--prompt").arg(prompt);
+    }
     let mut process = Process::spawn(command, true)?;
     let written = process.write(audio)?;
     let Some((success, output)) = collect(&mut process, shared, timeout, MAX_TRANSCRIPT)? else {

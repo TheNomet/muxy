@@ -51,6 +51,8 @@ pub(crate) struct Composer {
     voice_poll: Option<Task<()>>,
     /// Whether dictation can run, from the app's capability table.
     pub(crate) dictation: muxy_core::capability::Capability,
+    /// The project's words that dictation expects and corrects to.
+    pub(crate) dictionary: std::sync::Arc<muxy_app_core::dictionary::Dictionary>,
     pub(crate) workspace_inset: f32,
     pub(crate) context_label: String,
     floating_dimensions: Option<gpui::Size<gpui::Pixels>>,
@@ -129,6 +131,7 @@ impl Composer {
             voice_snapshot: muxy_ui::voice::Snapshot::default(),
             voice_poll: None,
             dictation: muxy_core::capability::Capability::Supported,
+            dictionary: std::sync::Arc::default(),
             workspace_inset: 0.0,
             context_label: String::new(),
             floating_resize: None,
@@ -280,6 +283,7 @@ impl Composer {
         match muxy_ui::voice::Recorder::start(
             self.settings.language.clone(),
             self.settings.voice_model.clone(),
+            self.dictionary.terms().to_vec(),
         ) {
             Ok(recorder) => self.record(recorder, cx),
             Err(error) => {
@@ -312,6 +316,7 @@ impl Composer {
                                 view.error =
                                     Some(tr!("No speech detected. Try dictation again.").into());
                             } else {
+                                let text = view.dictionary.correct(&text);
                                 view.input
                                     .update(cx, |input, cx| input.insert_at_selection(&text, cx));
                             }

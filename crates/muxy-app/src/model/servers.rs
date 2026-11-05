@@ -492,6 +492,7 @@ impl AppModel {
         }
         self.forget_server_sessions(server, cx);
         self.forget_server_layouts(server, cx);
+        self.forget_server_dictionary(server);
         if server.is_local() {
             self.quick.closing = None;
             self.refresh_quick_terminal(cx);

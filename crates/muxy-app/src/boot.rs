@@ -308,6 +308,11 @@ pub(crate) enum Work {
         request: u64,
         layout: muxy_app_core::project_layouts::Descriptor,
     },
+    /// Reads the dictation dictionary of the first of these projects that has one.
+    ProjectDictionary {
+        project: muxy_protocol::ProjectId,
+        fallback: Option<muxy_protocol::ProjectId>,
+    },
     ReadCatalog,
     CancelCreation(muxy_protocol::OperationId),
     MutateProject(muxy_protocol::ProjectIntent),
@@ -392,6 +397,7 @@ impl Work {
             Self::ProjectSessions { .. } => "ProjectSessions",
             Self::ProjectLayouts { .. } => "ProjectLayouts",
             Self::LoadProjectLayout { .. } => "LoadProjectLayout",
+            Self::ProjectDictionary { .. } => "ProjectDictionary",
             Self::ReadCatalog => "ReadCatalog",
             Self::CancelCreation(..) => "CancelCreation",
             Self::MutateProject(..) => "MutateProject",
@@ -464,6 +470,10 @@ pub(crate) enum Update {
         request: u64,
         layout: muxy_app_core::project_layouts::Descriptor,
         result: Result<muxy_app_core::project_layouts::Config, String>,
+    },
+    ProjectDictionary {
+        project: muxy_protocol::ProjectId,
+        result: Result<muxy_app_core::dictionary::Dictionary, String>,
     },
     Catalog(Result<muxy_protocol::CatalogPage, ClientError>),
     ProjectMutated {
@@ -899,6 +909,10 @@ fn rejected(work: Work, error: ClientError) -> Update {
             layout,
             result: Err(error.to_string()),
         },
+        Work::ProjectDictionary { project, .. } => Update::ProjectDictionary {
+            project,
+            result: Err(error.to_string()),
+        },
         Work::ReadServerSettings | Work::WriteServerSettings(_) => {
             Update::ServerSettings(Err(error))
         }
@@ -994,6 +1008,13 @@ fn perform(work: Work, client: &Client, target: &Target) -> Option<Update> {
                 request,
                 result: project_layouts::load(client, project, &layout),
                 layout,
+            });
+        }
+        Work::ProjectDictionary { project, fallback } => {
+            let projects: Vec<_> = std::iter::once(project).chain(fallback).collect();
+            return Some(Update::ProjectDictionary {
+                project,
+                result: dictionary::load(client, &projects),
             });
         }
         Work::ReadCatalog => return Some(Update::Catalog(client.catalog())),
@@ -1264,6 +1285,7 @@ pub(crate) fn missing_session(error: &ClientError) -> bool {
 }
 
 mod delivery;
+mod dictionary;
 mod project_layouts;
 mod requests;
 

@@ -411,6 +411,7 @@
 "Could not install the update: %@" = "Could not install the update: %@";
 "Could not install update (%@) or restore the previous app (%@). The previous app is at %@" = "Could not install update (%@) or restore the previous app (%@). The previous app is at %@";
 "Could not install update; the previous app was restored: %@" = "Could not install update; the previous app was restored: %@";
+"Could not load %@: %@" = "Could not load %@: %@";
 "Could not load .muxy/layouts: %@" = "Could not load .muxy/layouts: %@";
 "Could not load layout “%@”: %@" = "Could not load layout “%@”: %@";
 "Could not load logo: %@" = "Could not load logo: %@";
@@ -1440,6 +1441,7 @@
 "Unexpected Git status reply" = "Unexpected Git status reply";
 "Unexpected backup entry: %@" = "Unexpected backup entry: %@";
 "Unexpected changes preview reply" = "Unexpected changes preview reply";
+"Unexpected dictionary file response" = "Unexpected dictionary file response";
 "Unexpected layout directory response" = "Unexpected layout directory response";
 "Unexpected layout file response" = "Unexpected layout file response";
 "Unexpected remote branches reply" = "Unexpected remote branches reply";

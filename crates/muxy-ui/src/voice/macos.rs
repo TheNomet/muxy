@@ -33,6 +33,8 @@ use crate::tr;
 
 const FINALIZATION: Duration = Duration::from_secs(2);
 const DEFAULT_LANGUAGE: &str = "en-US";
+/// Apple recommends at most 100 contextual phrases per request.
+const MAX_CONTEXTUAL_STRINGS: usize = 100;
 
 pub const CAPABILITY: muxy_core::capability::Capability =
     muxy_core::capability::Capability::Supported;
@@ -92,7 +94,11 @@ fn system_language(available: &[Language], preferences: &NSArray<NSString>) -> O
     Some(matched)
 }
 
-pub(super) fn start(language: String, _model: String) -> Result<Recorder, String> {
+pub(super) fn start(
+    language: String,
+    _model: String,
+    vocabulary: Vec<String>,
+) -> Result<Recorder, String> {
     for key in [
         "NSMicrophoneUsageDescription",
         "NSSpeechRecognitionUsageDescription",
@@ -113,7 +119,7 @@ pub(super) fn start(language: String, _model: String) -> Result<Recorder, String
         .name("composer-dictation".into())
         .spawn(move || {
             objc2::rc::autoreleasepool(|_| {
-                if let Err(error) = record(&language, &worker) {
+                if let Err(error) = record(&language, &vocabulary, &worker) {
                     let mut snapshot = worker
                         .snapshot
                         .lock()
@@ -310,7 +316,7 @@ fn select_language<'a>(available: &'a [Language], requested: &str) -> Option<&'a
         .or_else(|| available.first())
 }
 
-fn capture(language: &str, shared: &Arc<Shared>) -> Result<Capture, String> {
+fn capture(language: &str, vocabulary: &[String], shared: &Arc<Shared>) -> Result<Capture, String> {
     unsafe {
         let available = languages();
         let selected = select_language(&available, language)
@@ -340,6 +346,14 @@ fn capture(language: &str, shared: &Arc<Shared>) -> Result<Capture, String> {
         let request = SFSpeechAudioBufferRecognitionRequest::new();
         request.setShouldReportPartialResults(true);
         request.setRequiresOnDeviceRecognition(true);
+        if !vocabulary.is_empty() {
+            let phrases: Vec<_> = vocabulary
+                .iter()
+                .take(MAX_CONTEXTUAL_STRINGS)
+                .map(|phrase| NSString::from_str(phrase))
+                .collect();
+            request.setContextualStrings(&NSArray::from_retained_slice(&phrases));
+        }
         recognizer.setDefaultTaskHint(SFSpeechRecognitionTaskHint::Dictation);
         let active = Arc::new(AtomicBool::new(true));
         let sink = CaptureDelegate::alloc().set_ivars(CaptureSink {
@@ -400,7 +414,7 @@ fn capture(language: &str, shared: &Arc<Shared>) -> Result<Capture, String> {
     }
 }
 
-fn record(language: &str, shared: &Arc<Shared>) -> Result<(), String> {
+fn record(language: &str, vocabulary: &[String], shared: &Arc<Shared>) -> Result<(), String> {
     if shared.cancelled.load(Ordering::Acquire) {
         return Ok(());
     }
@@ -408,7 +422,7 @@ fn record(language: &str, shared: &Arc<Shared>) -> Result<(), String> {
     if shared.cancelled.load(Ordering::Acquire) {
         return Ok(());
     }
-    let mut capture = capture(language, shared)?;
+    let mut capture = capture(language, vocabulary, shared)?;
     let _device = DeviceObserver::new(shared.clone())?;
     unsafe {
         capture.session.startRunning();

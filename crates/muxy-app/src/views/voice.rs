@@ -38,13 +38,14 @@ impl VoicePanel {
     pub(crate) fn new(
         language: String,
         model: String,
+        vocabulary: Vec<String>,
         auto_send: bool,
         theme: Theme,
         metrics: Metrics,
         cx: &mut Context<Self>,
     ) -> Self {
         Self::with_recorder(
-            Recorder::start(language, model),
+            Recorder::start(language, model, vocabulary),
             auto_send,
             theme,
             metrics,

@@ -1560,6 +1560,7 @@ impl AppModel {
         }
         self.sync_composer(cx);
         self.sync_project_layouts(cx);
+        self.sync_dictionary(cx);
         self.sync_voice(cx);
         self.sync_git(cx);
         self.sync_references(cx);
@@ -2076,6 +2077,9 @@ impl AppModel {
                 layout,
                 result,
             } => self.receive_project_layout(project, request, &layout, result, cx),
+            Update::ProjectDictionary { project, result } => {
+                self.receive_dictionary(project, result, cx);
+            }
             Update::Activity(result) => self.receive_activity(server, result, cx),
             Update::ActivityClaimed(result) => self.deliver_activity(server, result),
             Update::ActivityAcknowledged { ids, result } => {

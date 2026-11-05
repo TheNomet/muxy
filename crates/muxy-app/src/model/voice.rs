@@ -1,13 +1,19 @@
 use super::AppModel;
+use crate::boot::Work;
 use crate::views::voice::{VoiceEvent, VoicePanel};
 use gpui::{
     AppContext, Context, Entity, Focusable, IntoElement, ParentElement, Styled, Subscription,
     Window, div,
 };
-use muxy_app_core::{PaneId, ServerId, composer::DraftId};
+use muxy_app_core::{
+    PaneId, ProjectId, ProjectKind, ProjectStatus, ServerId, composer::DraftId,
+    dictionary::Dictionary,
+};
 use muxy_core::capability::Feature;
 use muxy_protocol::{ChannelId, Modes};
 use muxy_ui::tr;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 struct Target {
     project: DraftId,
@@ -24,9 +30,102 @@ pub(crate) struct VoiceRuntime {
     exit: Option<gpui::Task<()>>,
     target: Option<Target>,
     subscription: Option<Subscription>,
+    /// Each project's `.muxy/dictionary.txt`, as last read.
+    dictionaries: HashMap<ProjectId, Arc<Dictionary>>,
+    /// The project whose dictionary was last requested on activation.
+    dictionary_project: Option<ProjectId>,
 }
 
 impl AppModel {
+    /// The current project's dictation dictionary.
+    pub(crate) fn dictionary(&self) -> Arc<Dictionary> {
+        self.voice
+            .dictionaries
+            .get(&self.state.current_project().id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub(super) fn sync_dictionary(&mut self, cx: &mut Context<Self>) {
+        let server = self.state.current_project().server_id;
+        if !self.ready(server)
+            || !self.state.project_intents(server).is_empty()
+            || self
+                .servers
+                .get(server)
+                .is_none_or(|runtime| runtime.catalog.restore.is_some())
+        {
+            return;
+        }
+        self.voice
+            .dictionaries
+            .retain(|id, _| self.state.project(*id).is_some());
+        let project = self.state.current_project().id;
+        if self.voice.dictionary_project != Some(project) && self.request_dictionary(cx) {
+            self.voice.dictionary_project = Some(project);
+        }
+    }
+
+    /// Reads the current project's dictionary again, so edits apply to the
+    /// next dictation. A worktree without one uses its project's.
+    fn request_dictionary(&mut self, cx: &mut Context<Self>) -> bool {
+        let project = self.state.current_project();
+        if project.status() != ProjectStatus::Available {
+            return false;
+        }
+        let work = Work::ProjectDictionary {
+            project: project.id,
+            fallback: project
+                .parent_id
+                .filter(|_| project.kind == Some(ProjectKind::Worktree)),
+        };
+        self.send(project.server_id, work, cx)
+    }
+
+    pub(super) fn receive_dictionary(
+        &mut self,
+        project: ProjectId,
+        result: Result<Dictionary, String>,
+        cx: &mut Context<Self>,
+    ) {
+        let dictionary = match result {
+            Ok(dictionary) => Arc::new(dictionary),
+            Err(error) => {
+                self.set_banner_error(Some(
+                    tr!(
+                        "Could not load %@: %@",
+                        muxy_app_core::dictionary::PATH,
+                        &error
+                    )
+                    .to_string(),
+                ));
+                cx.notify();
+                return;
+            }
+        };
+        if self.state.project(project).is_none() {
+            return;
+        }
+        if project == self.state.current_project().id
+            && let Some(view) = &self.composer.view
+        {
+            let dictionary = dictionary.clone();
+            view.update(cx, |view, _| view.dictionary = dictionary);
+        }
+        self.voice.dictionaries.insert(project, dictionary);
+    }
+
+    /// Forgets which project's dictionary was read, so a new connection to
+    /// `server` reads it again.
+    pub(super) fn forget_server_dictionary(&mut self, server: ServerId) {
+        if self
+            .voice
+            .dictionary_project
+            .is_some_and(|project| self.state.project_server(project) == Some(server))
+        {
+            self.voice.dictionary_project = None;
+        }
+    }
     pub(crate) fn toggle_voice(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_prompt.is_some() {
             return;
@@ -38,6 +137,7 @@ impl AppModel {
         if !self.require(Feature::Voice, cx) {
             return;
         }
+        self.request_dictionary(cx);
         if let Some(view) = &self.composer.view {
             view.update(cx, crate::views::composer::Composer::toggle_voice);
             view.focus_handle(cx).focus(window);
@@ -64,10 +164,12 @@ impl AppModel {
         self.dismiss_overlay(cx);
         self.voice.closing = None;
         self.voice.exit = None;
+        let vocabulary = self.dictionary().terms().to_vec();
         let view = cx.new(|cx| {
             VoicePanel::new(
                 self.settings.composer.language.clone(),
                 self.settings.composer.voice_model.clone(),
+                vocabulary,
                 self.settings.composer.voice_auto_send,
                 self.theme.clone(),
                 self.metrics,
@@ -131,7 +233,8 @@ impl AppModel {
             self.close_voice(cx);
             return;
         }
-        let mut bytes = crate::views::terminal::clipboard::paste(text, target.modes);
+        let text = self.dictionary().correct(text);
+        let mut bytes = crate::views::terminal::clipboard::paste(&text, target.modes);
         if self.settings.composer.voice_auto_send {
             bytes.push(b'\r');
         }
